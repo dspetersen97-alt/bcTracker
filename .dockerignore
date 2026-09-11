@@ -1,0 +1,37 @@
+# The Dockerfile does `COPY . .`, so anything not excluded here ends up in the
+# image. Two categories matter beyond image size:
+#
+#   * Secrets. .env holds the master key and database password. Baking it into a
+#     layer would put them in any registry the image is pushed to, and they would
+#     stay there even if a later layer deleted the file.
+#   * Host-built artifacts. .venv is a Windows virtualenv with absolute paths and
+#     platform wheels; copying it in would shadow nothing but waste hundreds of
+#     megabytes and confuse anyone who found it.
+
+.env
+.env.*
+!.env.example
+secrets/
+
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+
+.git/
+.github/
+.gitignore
+
+# Runtime data, never part of a build.
+documents/
+backups/
+media/
+staticfiles/
+
+# Notes and planning material.
+.instructions/
+*.md
+!README.md

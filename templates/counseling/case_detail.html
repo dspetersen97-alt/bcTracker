@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}{{ case.label }} — bcTracker{% endblock %}
+
+{% block content %}
+<h1>{{ case.label }}</h1>
+<p class="role">{{ case.get_kind_display }} · {{ case.get_status_display }}</p>
+
+<dl class="detail-list">
+  <dt>Counselor</dt><dd>{{ case.counselor.full_name }}</dd>
+  <dt>Opened</dt><dd>{{ case.opened_on }}</dd>
+  {% if case.closed_on %}<dt>Closed</dt><dd>{{ case.closed_on }}</dd>{% endif %}
+</dl>
+
+{% comment %} show_notes is decided in the view, not here: a template condition is the wrong
+   place for "may this role read the presenting concern". {% endcomment %}
+{% if show_notes %}
+  <div class="card">
+    <h2>Presenting concern</h2>
+    <p>{{ case.notes|linebreaksbr|default:"Nothing recorded." }}</p>
+  </div>
+{% endif %}
+
+<h2>Counselees</h2>
+<table class="table">
+  <thead><tr><th>Name</th><th>Joined</th><th>Ended</th>{% if can_manage_members %}<th></th>{% endif %}</tr></thead>
+  <tbody>
+    {% for member in members %}
+      <tr>
+        <td>{{ member.counselee.full_name }}
+          {% if show_notes %}<span class="muted">{{ member.counselee.email }}</span>{% endif %}</td>
+        <td>{{ member.joined_on }}</td>
+        <td>{{ member.ended_on|default:"—" }}</td>
+        {% if can_manage_members %}
+          <td>
+            {% if not member.ended_on %}
+              <form method="post" action="{% url 'counseling:case_member_end' case.pk member.pk %}" class="inline-form">
+                {% csrf_token %}
+                <button type="submit" class="link-button">End membership</button>
+              </form>
+            {% endif %}
+          </td>
+        {% endif %}
+      </tr>
+    {% empty %}
+      <tr><td colspan="4" class="empty">Nobody is on this case yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div class="actions">
+  {% if can_see_documents %}
+    <a class="button" href="{% url 'documents:case_documents' case.pk %}">Documents</a>
+  {% endif %}
+  {% if can_see_messages %}
+    <a class="button" href="{% url 'messaging:case_threads' case.pk %}">Messages</a>
+  {% endif %}
+  {% comment %} No permission guard: everyone who can see this page can see the case's
+     appointments, financial_admin included — that is what gets invoiced. What
+     appears there is still Booking.objects.for_actor, and no note is rendered. {% endcomment %}
+  <a class="button" href="{% url 'scheduling:case_appointments' case.pk %}">Appointments</a>
+  {% comment %} Also unguarded, and for the same reason: billing.view_case_invoices allows
+     everyone who can reach this page, financial_admin included. Whose invoices show up
+     is Invoice.objects.for_actor's answer, not this link's. {% endcomment %}
+  <a class="button" href="{% url 'billing:case_invoices' case.pk %}">Invoices</a>
+  {% if can_change %}<a class="button" href="{% url 'counseling:case_edit' case.pk %}">Edit case</a>{% endif %}
+  {% if can_manage_members %}
+    <a class="button" href="{% url 'counseling:case_member_add' case.pk %}">Add a counselee</a>
+  {% endif %}
+  {% if can_close %}
+    <form method="post" action="{% url 'counseling:case_close' case.pk %}" class="inline-form">
+      {% csrf_token %}
+      <button type="submit">Close case</button>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Messages — bcTracker{% endblock %}
+
+{% block content %}
+<h1>Messages</h1>
+<p class="role">
+  {% if user.role == 'counselee' %}
+    Between you and your counselor. Nobody else on your case can read these.
+  {% else %}
+    Conversations on the cases you can see. Each one is between the counselor and
+    one counselee.
+  {% endif %}
+</p>
+
+<table class="table">
+  <thead>
+    <tr><th>Subject</th><th>Case</th><th>Last message</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for thread in threads %}
+      <tr>
+        <td>
+          <a href="{% url 'messaging:thread' thread.pk %}">{{ thread.subject }}</a>
+          {% if not thread.is_open %}<span class="badge">closed</span>{% endif %}
+        </td>
+        <td>{{ thread.case.label }}</td>
+        <td>{{ thread.last_message_at|date:"j M Y, g:i a" }}</td>
+        <td class="row-actions">
+          {% if thread.unread_count %}
+            <span class="badge badge-count">{{ thread.unread_count }} new</span>
+          {% endif %}
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="4" class="empty">No conversations yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if user.role == 'counselee' %}
+  <p class="alt">
+    To start a conversation, open your case from
+    <a href="{% url 'counseling:my_cases' %}">My counseling</a>.
+  </p>
+{% endif %}
+{% endblock %}

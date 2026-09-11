@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Messages — {{ case.label }} — bcTracker{% endblock %}
+
+{% block content %}
+<h1>Messages</h1>
+<p class="role">{{ case.label }}</p>
+
+{% if user.role == 'counselee' %}
+  <p class="notice">
+    These are your conversations with your counselor. Anyone else on this case has
+    their own, and cannot read yours.
+  </p>
+{% endif %}
+
+<table class="table">
+  <thead>
+    <tr><th>Subject</th><th>With</th><th>Last message</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for thread in threads %}
+      <tr>
+        <td>
+          <a href="{% url 'messaging:thread' thread.pk %}">{{ thread.subject }}</a>
+          {% if not thread.is_open %}<span class="badge">closed</span>{% endif %}
+        </td>
+        {% comment %} Started by, not the participant list: naming everyone in the row would
+           be a second place the audience is stated, and the thread page already
+           states it. {% endcomment %}
+        <td>{{ thread.started_by.full_name }}</td>
+        <td>{{ thread.last_message_at|date:"j M Y, g:i a" }}</td>
+        <td class="row-actions">
+          {% if thread.unread_count %}
+            <span class="badge badge-count">{{ thread.unread_count }} new</span>
+          {% endif %}
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="4" class="empty">No conversations on this case yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div class="actions">
+  {% if can_start %}
+    <a class="button" href="{% url 'messaging:start' case.pk %}">Start a conversation</a>
+  {% endif %}
+  <a class="button" href="{% url 'counseling:case_detail' case.pk %}">Back to the case</a>
+</div>
+{% endblock %}

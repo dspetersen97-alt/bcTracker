@@ -1,0 +1,58 @@
+# Runtime dependencies. Pinned exactly — this is a production system holding
+# counseling records, so upgrades should be deliberate, not incidental.
+
+# Django 5.2 is the current LTS (security support through April 2028).
+django==5.2.17
+
+psycopg[binary]==3.3.5
+
+# Password hashing. Argon2id is Django's strongest built-in hasher and is set
+# first in PASSWORD_HASHERS (config/settings/base.py).
+argon2-cffi==25.1.0
+
+django-environ==0.12.0
+gunicorn==23.0.0
+whitenoise==6.11.0
+
+# TOTP second factor, required for every staff role. django-otp owns the device
+# model and the "is this session verified" check; enforcement that staff cannot
+# reach anything before verifying is ours (apps/accounts/middleware.py).
+django-otp==1.7.3
+
+# Renders the enrolment QR code. Kept to the base install with no image extra:
+# we emit SVG, so Pillow is not pulled in here. Pillow arrives with documents.
+qrcode==8.2
+
+# Login throttling: counts failed password attempts per (address, IP) pair and
+# locks that pair out for a cooloff period. Chosen over a bespoke counter because
+# getting this wrong is quiet — a throttle that miscounts, resets, or reads the
+# wrong client IP behind the proxy looks exactly like one that works. Only the
+# AccessAttempt counter is used; its access log is disabled in favour of the
+# audit trail. See config/settings/base.py and apps/accounts/lockout.py.
+django-axes==8.3.1
+
+# Object-level permission predicates, published on PyPI as "rules" (the
+# similarly named django-rules package is unrelated and abandoned). Chosen over
+# django-guardian because access here is computed from case membership rather
+# than stored as per-object ACL rows.
+rules==3.5
+
+# Document encryption. Used through hazmat's AESGCM directly rather than Fernet,
+# because Fernet has no streaming interface and would mean holding a whole
+# 25 MB upload in memory to encrypt it. See apps/documents/crypto.py.
+cryptography==50.0.1
+
+# Thumbnails, and the EXIF strip on ingest. Re-encoding through Pillow is what
+# drops the GPS coordinates a phone photo carries — a real disclosure risk when
+# the photo is of a counselee's home or family.
+pillow==12.3.0
+
+# ClamAV client. The daemon runs as its own compose service; this only speaks to
+# it over a socket, so nothing about virus definitions lives in this image.
+clamd==1.0.2
+
+# Google Calendar. Plain HTTP rather than google-api-python-client, which pulls
+# in a discovery-document layer and four more packages to reach the three
+# endpoints this needs (token, events, freeBusy). The OAuth refresh exchange is
+# one documented POST; see apps/scheduling/google/.
+requests==2.32.5

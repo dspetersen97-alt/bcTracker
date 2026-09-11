@@ -1,0 +1,473 @@
+/*
+ * One stylesheet, no framework, no build step.
+ *
+ * The Content-Security-Policy served by Caddy has no 'unsafe-inline', so all
+ * styling must live in a file like this one rather than in style attributes or
+ * <style> blocks. System fonts only: a webfont request would need the CSP
+ * widened and would tell a third party which pages a counselee visited.
+ */
+
+:root {
+  --ink: #1c2024;
+  --ink-soft: #5a636c;
+  --paper: #f7f6f3;
+  --card: #ffffff;
+  --line: #dcd9d2;
+  --accent: #2f5d50;
+  --accent-ink: #ffffff;
+  --danger: #9b2226;
+  --ok: #2f6b3f;
+  --radius: 6px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* Visible only when focused, so keyboard users can jump the header. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+}
+.skip-link:focus {
+  left: 0.5rem;
+  top: 0.5rem;
+  z-index: 10;
+  padding: 0.5rem 0.75rem;
+  background: var(--card);
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+}
+
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.75rem 1.25rem;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  font-weight: 650;
+  font-size: 1.05rem;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.site-header nav {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.9rem;
+}
+
+.who { color: var(--ink-soft); }
+
+main {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+}
+
+h1 {
+  margin: 0 0 0.75rem;
+  font-size: 1.4rem;
+  line-height: 1.25;
+}
+
+a { color: var(--accent); }
+
+.alt {
+  margin-top: 1.25rem;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+
+.role { color: var(--ink-soft); }
+
+.next-steps {
+  margin: 1rem 0 0;
+  padding-left: 1.1rem;
+  color: var(--ink-soft);
+}
+
+/* --- forms --- */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0 0 1rem;
+}
+
+label { font-weight: 600; font-size: 0.9rem; }
+
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="date"],
+input[type="number"],
+select,
+textarea {
+  padding: 0.55rem 0.65rem;
+  font: inherit;
+  font-size: 1rem;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+textarea { min-height: 6rem; resize: vertical; }
+
+/* File inputs are left with the browser's own control. A restyled one is a
+   custom widget that needs JavaScript, and there is none here. */
+input[type="file"] { font-size: 0.95rem; }
+
+input:focus-visible,
+button:focus-visible,
+a:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.field-invalid input,
+.field-invalid select,
+.field-invalid textarea { border-color: var(--danger); }
+
+.help { font-size: 0.85rem; color: var(--ink-soft); }
+
+.error, .errors {
+  color: var(--danger);
+  font-size: 0.88rem;
+}
+
+.errors { margin: 0 0 1rem; padding-left: 1.1rem; }
+
+/* Submit buttons and link-buttons look the same on purpose: whether an action is
+   a POST or a GET is our concern, not something the reader should have to decode
+   from two different visual styles. .link-button below is the exception, for
+   actions that sit inside a table row. */
+button,
+.button {
+  display: inline-block;
+  padding: 0.6rem 1.1rem;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--accent-ink);
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+button:hover,
+.button:hover { filter: brightness(1.12); }
+
+button.danger,
+.button.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+/* Actions on a row: a group of buttons and inline forms that should sit on one
+   line with the same baseline. Always a <div>, never a <p>: a paragraph may not
+   contain a form, and a browser that meets one closes the paragraph early — which
+   drops the remaining buttons out of this flex row without any error anywhere. */
+.actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 1.25rem 0 0;
+}
+
+.inline-form { display: inline; margin: 0; }
+
+.link-button {
+  padding: 0;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--accent);
+  background: none;
+  border: none;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* --- tables and detail lists --- */
+
+.table {
+  width: 100%;
+  margin: 0.75rem 0 0;
+  border-collapse: collapse;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-size: 0.93rem;
+}
+
+.table th,
+.table td {
+  padding: 0.55rem 0.7rem;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+
+.table th {
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+
+.table tbody tr:last-child td { border-bottom: none; }
+
+/* Table actions are secondary to the row's content, so they stay as text. */
+.table .link-button { font-size: 0.88rem; }
+
+.detail-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.35rem 1rem;
+  margin: 1rem 0 0;
+  font-size: 0.95rem;
+}
+
+.detail-list dt { font-weight: 600; color: var(--ink-soft); }
+.detail-list dd { margin: 0; }
+
+.muted, .empty { color: var(--ink-soft); font-size: 0.9rem; }
+
+.notice {
+  padding: 0.7rem 0.85rem;
+  background: var(--paper);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  font-size: 0.92rem;
+}
+
+/* --- scheduling --- */
+
+/* Forms long enough to want a measure of their own: office hours, a booking
+   confirmation, a session outcome. Everything inside is already stacked by
+   .field, so this only stops the inputs running the width of a desktop. */
+.stacked { max-width: 30rem; }
+
+/* Actions belonging to one row of a table, kept off the content beside them. */
+.row-actions { white-space: nowrap; text-align: right; }
+
+/* Bookable times. One section per day, and the times inside wrap: a counselor
+   with a full week produces a long list and a fixed grid would either scroll
+   sideways on a phone or waste half a monitor. */
+.day {
+  margin: 1.25rem 0 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+.day h2 {
+  margin: 0 0 0.6rem;
+  font-size: 1rem;
+}
+
+.slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A slot is a link that reads as a choice. Fixed measure so a column of times
+   lines up, and the tap target is deliberately generous — this is the one
+   control a counselee has to hit on a phone. */
+.slot {
+  min-width: 7rem;
+  padding: 0.6rem 0.9rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Previous and next fortnight. Not a paginator over a list — there is no last
+   page, only the counselor's booking horizon. */
+.pager {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: baseline;
+  margin: 1rem 0 0;
+  font-size: 0.92rem;
+}
+
+/* What became of an appointment. Colour carries no meaning on its own: every
+   badge here sits beside the status word itself, because a counselee reading
+   this on a phone in sunlight should not have to distinguish two greens. */
+.status { white-space: nowrap; }
+.status-requested { color: var(--ink-soft); }
+.status-confirmed { color: var(--ok); }
+.status-completed { color: var(--ok); }
+.status-cancelled { color: var(--danger); }
+.status-no_show { color: var(--danger); }
+
+/* A qualifier on a status — "late notice", "inside the notice period". Small and
+   quiet: it is a fact for the invoice, not a reprimand for the counselee. */
+.badge {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+/* A count of what is waiting, in the header and beside a conversation. Louder
+   than a plain .badge because this one is asking for something to be done. The
+   number is always followed by a word ("3 new"), so it does not depend on
+   colour to be understood. */
+.badge-count {
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* --- conversations --- */
+
+/* A thread reads top to bottom, oldest first. Deliberately not styled as two
+   opposing columns of speech bubbles: this is correspondence with a counselor,
+   and a layout borrowed from a chat app would invite it to be treated like one. */
+.conversation {
+  margin: 1rem 0 1.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.said {
+  margin: 0 0 0.75rem;
+  padding: 0.8rem 1rem;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line);
+  border-radius: var(--radius);
+}
+
+/* Your own words, marked quietly. */
+.said-by-me { border-left-color: var(--accent); }
+
+.said-who {
+  margin: 0 0 0.35rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.said-who .muted { font-weight: 400; margin-left: 0.4rem; }
+
+.said-what { margin: 0; }
+
+/* Files sent with a message, listed under the words rather than beside them: the
+   message is what says why the file was sent, so it reads first. */
+.attachments {
+  margin: 0.6rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9rem;
+}
+
+.attachments li {
+  padding: 0.2rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.attachments .muted { margin-left: 0.4rem; }
+
+/* --- document previews --- */
+
+/* Thumbnails come from documents:thumbnail, which decrypts one on request. They
+   are never a file on disk in the clear, so there is no static URL to point at. */
+.thumb-cell { width: 4.5rem; }
+
+.thumb, .preview {
+  display: block;
+  height: auto;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.preview { margin: 1rem 0; max-width: 100%; }
+
+/* --- messages --- */
+
+.messages {
+  max-width: 44rem;
+  margin: 1rem auto 0;
+  padding: 0 1.25rem;
+  list-style: none;
+}
+
+.message {
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--card);
+  font-size: 0.92rem;
+}
+
+.message-success { border-color: var(--ok); }
+.message-error { border-color: var(--danger); }
+
+/* --- two-factor enrolment --- */
+
+.qr {
+  margin: 1rem 0;
+  padding: 0.75rem;
+  width: fit-content;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.qr svg { display: block; width: 200px; height: 200px; }
+
+.secret {
+  display: inline-block;
+  padding: 0.35rem 0.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  word-break: break-all;
+}
+
+.site-footer {
+  padding: 1rem 1.25rem 2rem;
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}

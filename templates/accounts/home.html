@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Your account — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>Your account</h1>
+  <p class="role">Signed in as <strong>{{ role_label }}</strong> ({{ user.email }}).</p>
+
+  <dl class="detail-list">
+    <dt>Name</dt><dd>{{ user.full_name }}</dd>
+    {% if user.phone %}<dt>Phone</dt><dd>{{ user.phone }}</dd>{% endif %}
+    <dt>Two-factor authentication</dt>
+    <dd>
+      {% if user.mfa_required %}
+        Required for your role, and active.
+      {% else %}
+        Optional for counselees. <a href="{% url 'accounts:mfa_setup' %}">Set up an authenticator app</a>
+        for extra protection.
+      {% endif %}
+    </dd>
+    {% if not is_staff_role %}
+      <dt>Emailed sign-in links</dt>
+      <dd>{% if user.allow_magic_link %}Enabled{% else %}Not enabled{% endif %}</dd>
+    {% endif %}
+  </dl>
+
+  <div class="actions">
+    <a class="button" href="{% url 'accounts:password_change' %}">Change password</a>
+    {% if can_manage_users %}
+      <a class="button" href="{% url 'counseling:counselee_create' %}">Add a counselee</a>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% load scheduling_tags %}
+{% block title %}Session note — bcTracker{% endblock %}
+
+{% block content %}
+<h1>Session note</h1>
+<p class="role">
+  {{ booking.starts_at|date:"l j F Y" }} at {{ booking.starts_at|time:"g:i a" }} ·
+  {{ booking|attendee_label:request.user }}
+</p>
+
+{% if booking.request_note %}
+  <div class="card">
+    <h2>What was asked</h2>
+    <p>{{ booking.request_note|linebreaksbr }}</p>
+  </div>
+{% endif %}
+
+<form method="post" class="stacked">
+  {% csrf_token %}
+  {% include "includes/form.html" %}
+  <div class="actions">
+    <button type="submit">Save note</button>
+    <a href="{% url 'scheduling:detail' booking.pk %}">Back</a>
+  </div>
+</form>
+
+<p class="muted">
+  Only you and an administrator can read this. The counselee cannot, and neither can
+  anyone working on billing.
+</p>
+{% endblock %}

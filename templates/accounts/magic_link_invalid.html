@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}That link no longer works — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>That link no longer works</h1>
+  {% comment %} One message for every cause — expired, already used, unknown, or a
+     deactivated account. Distinguishing them would tell an unauthenticated
+     visitor which addresses have accounts. {% endcomment %}
+  <p>Sign-in links expire and can only be used once.</p>
+  <p><a href="{% url 'accounts:magic_link_request' %}">Send me a new link</a></p>
+</div>
+{% endblock %}

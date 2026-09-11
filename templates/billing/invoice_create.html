@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Raise an invoice — {{ case.label }} — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>Raise an invoice</h1>
+  <p class="role"><a href="{% url 'billing:case_invoices' case.pk %}">{{ case.label }}</a></p>
+
+  <p class="notice">This creates a draft. Nobody is emailed and the person being billed
+    cannot see it until you send it, so there is room to get it right first.</p>
+
+  <form method="post">
+    {% csrf_token %}
+    {% include "includes/form.html" %}
+    <button type="submit">Create the draft</button>
+  </form>
+
+  {% comment %} Said plainly because the form lists every uninvoiced session on the case,
+     each labelled with whose it is. One invoice is addressed to one payer — see
+     InvoiceCreateForm.clean. {% endcomment %}
+  <p class="muted">One invoice goes to one person. Only tick sessions belonging to
+    whoever is being billed; on a couple's case each person gets their own invoice.</p>
+</div>
+{% endblock %}

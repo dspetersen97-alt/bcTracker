@@ -1,0 +1,17 @@
+{% autoescape off %}Hello{% if recipient.first_name %} {{ recipient.first_name }}{% endif %},
+
+{{ counselor_name }} has scheduled an appointment for you:
+
+  {{ when }} ({{ minutes }} minutes)
+{% if is_joint %}
+Everyone on the case is expected at this one.
+{% endif %}
+The details are here:
+
+{{ url }}
+
+If that time does not work, you can cancel it from that page and book another.
+
+bcTracker
+{{ site_url }}
+{% endautoescape %}

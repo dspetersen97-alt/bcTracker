@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}{{ invoice.number }} — bcTracker{% endblock %}
+
+{% block content %}
+<h1>Invoice {{ invoice.number }}</h1>
+<p class="role">{{ invoice.get_status_display }}
+  {% if invoice.is_overdue %}<span class="badge">overdue</span>{% endif %}</p>
+
+{% if just_paid %}
+  {% comment %} Not "paid". The payer has come back from Stripe, but the payment is recorded
+     when the webhook arrives — usually a second or two later, occasionally longer.
+     Saying "paid" here would be this page guessing. {% endcomment %}
+  <p class="notice">Thank you. Your payment is being confirmed — this page will show it
+    once Stripe has told us it went through. That is usually within a minute.</p>
+{% endif %}
+
+{% if invoice.is_draft %}
+  <p class="notice">This is a draft. {{ invoice.counselee.full_name }} cannot see it yet.</p>
+{% endif %}
+{% if invoice.void_reason %}
+  <p class="notice">Withdrawn: {{ invoice.void_reason }}</p>
+{% endif %}
+
+<dl class="detail-list">
+  <dt>Billed to</dt><dd>{{ invoice.counselee.full_name }}</dd>
+  {% comment %} The case label is shown to staff and to the payer alike: it is the payer's own
+     case, and a bill that did not say what it was for would be worse. {% endcomment %}
+  <dt>Case</dt><dd>{{ invoice.case.label }}</dd>
+  <dt>Issued</dt><dd>{{ invoice.issued_on|default:"not yet" }}</dd>
+  <dt>Due</dt><dd>{{ invoice.due_on|default:"—" }}</dd>
+  {% if invoice.memo %}<dt>Note</dt><dd>{{ invoice.memo }}</dd>{% endif %}
+</dl>
+
+<table class="table">
+  <thead>
+    <tr><th>What for</th><th>Quantity</th><th>Each</th><th>Amount</th>{% if can_change %}<th></th>{% endif %}</tr>
+  </thead>
+  <tbody>
+    {% for line in lines %}
+      <tr>
+        <td>{{ line.description }}</td>
+        <td>{{ line.quantity }}</td>
+        <td class="amount">{{ line.display_unit_amount }}</td>
+        <td class="amount">{{ line.display_amount }}</td>
+        {% if can_change %}
+          <td class="row-actions">
+            <form method="post" action="{% url 'billing:line_remove' invoice.pk line.pk %}" class="inline-form">
+              {% csrf_token %}
+              <button type="submit" class="link-button">Remove</button>
+            </form>
+          </td>
+        {% endif %}
+      </tr>
+    {% empty %}
+      <tr><td colspan="5" class="empty">Nothing on this invoice yet.</td></tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr class="total-row">
+      <td colspan="3">Total</td>
+      <td class="amount">{{ invoice.display_total }}</td>
+      {% if can_change %}<td></td>{% endif %}
+    </tr>
+    <tr>
+      <td colspan="3">Paid</td>
+      <td class="amount">{{ invoice.display_paid }}</td>
+      {% if can_change %}<td></td>{% endif %}
+    </tr>
+    <tr class="total-row">
+      <td colspan="3">Balance</td>
+      <td class="amount">{{ invoice.display_balance }}</td>
+      {% if can_change %}<td></td>{% endif %}
+    </tr>
+  </tfoot>
+</table>
+
+{% if can_change %}
+  <div class="card">
+    <h2>Add a charge</h2>
+    <p class="role">For something that did not come from a session — materials, a
+      workbook. Only possible while this is a draft.</p>
+    <form method="post" action="{% url 'billing:line_add' invoice.pk %}">
+      {% csrf_token %}
+      {% with form=line_form %}{% include "includes/form.html" %}{% endwith %}
+      <button type="submit">Add it</button>
+    </form>
+  </div>
+{% endif %}
+
+{% if payments %}
+  <h2>Payments</h2>
+  <table class="table">
+    <thead>
+      <tr><th>Date</th><th>How</th><th>Reference</th><th>Amount</th>{% if can_reverse_payment %}<th></th>{% endif %}</tr>
+    </thead>
+    <tbody>
+      {% for payment in payments %}
+        <tr>
+          <td>{{ payment.received_on }}</td>
+          <td>{{ payment.get_method_display }}{% if payment.is_reversal %} (reversal){% endif %}</td>
+          <td class="muted">{% if user.role == 'counselee' %}
+              {% comment %} A reference is the office's own note — a check number, "envelope in
+                 the Sunday collection". Not written for the payer to read. {% endcomment %}
+              —{% else %}{{ payment.reference|default:"—" }}{% endif %}</td>
+          <td class="amount">{{ payment.display_amount }}</td>
+          {% if can_reverse_payment %}
+            <td class="row-actions">
+              {% if not payment.is_reversal and not payment.reversed_by %}
+                <form method="post" action="{% url 'billing:payment_reverse' invoice.pk payment.pk %}" class="inline-form">
+                  {% csrf_token %}
+                  <input type="hidden" name="reason" value="Reversed by the office">
+                  <button type="submit" class="link-button">Reverse</button>
+                </form>
+              {% endif %}
+            </td>
+          {% endif %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endif %}
+
+<div class="actions">
+  {% if can_pay %}
+    {% comment %} POST, not a link: this creates a payment session at Stripe, so it must not be
+       reachable by a prefetch or a link somebody could be induced to click. {% endcomment %}
+    <form method="post" action="{% url 'billing:pay' invoice.pk %}" class="inline-form">
+      {% csrf_token %}
+      <button type="submit">Pay {{ invoice.display_balance }} by card</button>
+    </form>
+  {% endif %}
+  {% if can_issue %}
+    <form method="post" action="{% url 'billing:invoice_issue' invoice.pk %}" class="inline-form">
+      {% csrf_token %}
+      <button type="submit">Send it</button>
+    </form>
+  {% endif %}
+  {% if can_record_payment %}
+    <a class="button" href="{% url 'billing:payment_record' invoice.pk %}">Record a payment</a>
+  {% endif %}
+  {% if can_void %}
+    <a class="button" href="{% url 'billing:invoice_void' invoice.pk %}">Withdraw</a>
+  {% endif %}
+  {% if can_write_off %}
+    <a class="button" href="{% url 'billing:invoice_write_off' invoice.pk %}">Write off</a>
+  {% endif %}
+  {% if user.role == 'counselee' %}
+    <a href="{% url 'billing:my_invoices' %}">My invoices</a>
+  {% else %}
+    <a href="{% url 'billing:case_invoices' invoice.case.pk %}">This case's invoices</a>
+  {% endif %}
+</div>
+
+{% if can_pay %}
+  <p class="muted">Card details are entered on Stripe's own page and never reach
+    bcTracker. Your card statement will show the ministry's name.</p>
+{% endif %}
+{% endblock %}

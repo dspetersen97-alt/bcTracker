@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}New conversation — {{ case.label }} — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>Start a conversation</h1>
+  <p class="role"><a href="{% url 'messaging:case_threads' case.pk %}">{{ case.label }}</a></p>
+
+  {% if user.role == 'counselee' %}
+    {% comment %} Said plainly, because the alternative is someone assuming their spouse can
+       read this. There is no field on this form that could change it. {% endcomment %}
+    <p class="notice">This goes to {{ case.counselor.full_name }} and to nobody
+      else. Anyone else on this case cannot see it.</p>
+  {% else %}
+    <p class="notice">A conversation is between you and the one person you choose.
+      Nobody else on the case can read it.</p>
+  {% endif %}
+
+  <form method="post" class="stacked" enctype="multipart/form-data">
+    {% csrf_token %}
+    {% include "includes/form.html" %}
+    <button type="submit">Send</button>
+  </form>
+</div>
+{% endblock %}

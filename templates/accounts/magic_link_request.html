@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Email me a sign-in link — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>Email me a sign-in link</h1>
+  <p>Enter your email address and we'll send you a link that signs you in.
+     The link works once and expires shortly after it is sent.</p>
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% include "includes/form.html" %}
+    <button type="submit" class="primary">Send the link</button>
+  </form>
+
+  <p class="alt"><a href="{% url 'accounts:login' %}">Sign in with a password instead</a></p>
+</div>
+{% endblock %}

@@ -1,0 +1,15 @@
+{% autoescape off %}Hello{% if user.first_name %} {{ user.first_name }}{% endif %},
+
+Here is your sign-in link for bcTracker:
+
+{{ url }}
+
+It works once, and expires at {{ expires_at }} UTC. If you did not ask to sign
+in, you can ignore this message — nobody can use the link but you, and it will
+stop working on its own.
+
+Please do not forward this email. The link is the same as a password.
+
+bcTracker
+{{ site_url }}
+{% endautoescape %}

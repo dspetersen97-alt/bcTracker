@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}{{ heading }} — bcTracker{% endblock %}
+
+{% block content %}
+{% comment %} Shared by billing:invoice_void and billing:invoice_write_off. The two actions
+   say opposite things about the ministry's books — withdrawing says the invoice was
+   wrong, writing off says it was right and will not be paid — so the heading and the
+   explanation come from the view rather than being guessed from the status here. {% endcomment %}
+<div class="card">
+  <h1>{{ heading }}</h1>
+  <p class="role">Invoice
+    <a href="{% url 'billing:invoice_detail' invoice.pk %}">{{ invoice.number }}</a> ·
+    {{ invoice.counselee.full_name }} · {{ invoice.display_total }}</p>
+
+  <p class="notice">{{ explanation }}</p>
+
+  <form method="post">
+    {% csrf_token %}
+    {% include "includes/form.html" %}
+    <button type="submit">{{ submit_label }}</button>
+    <a href="{% url 'billing:invoice_detail' invoice.pk %}">Leave it alone</a>
+  </form>
+
+  <p class="muted">The reason is kept on the invoice and in the audit trail. Write it
+    for whoever reads the books next year, not for today.</p>
+</div>
+{% endblock %}

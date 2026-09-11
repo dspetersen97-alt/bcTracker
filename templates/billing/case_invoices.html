@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Invoices — {{ case.label }} — bcTracker{% endblock %}
+
+{% block content %}
+<h1>Invoices</h1>
+<p class="role"><a href="{% url 'counseling:case_detail' case.pk %}">{{ case.label }}</a></p>
+
+{% comment %} One page for every role that can reach it, and what differs is what is in the
+   tables — Invoice.objects.for_actor decides, not this template. On a shared case a
+   counselee sees the invoices addressed to them and none of the other's. {% endcomment %}
+{% if user.role == 'counselee' %}
+  <p class="notice">Your own invoices for this case. Nobody else on the case can see
+    them, and you cannot see theirs.</p>
+{% endif %}
+
+<table class="table">
+  <thead>
+    <tr><th>Invoice</th><th>Who</th><th>Issued</th><th>Status</th><th>Total</th><th>Balance</th></tr>
+  </thead>
+  <tbody>
+    {% for invoice in invoices %}
+      <tr>
+        <td><a href="{% url 'billing:invoice_detail' invoice.pk %}">{{ invoice.number }}</a></td>
+        <td>{{ invoice.counselee.full_name }}</td>
+        <td>{{ invoice.issued_on|default:"—" }}</td>
+        <td>{{ invoice.get_status_display }}
+          {% if invoice.is_overdue %}<span class="badge">overdue</span>{% endif %}</td>
+        <td class="amount">{{ invoice.display_total }}</td>
+        <td class="amount">{{ invoice.display_balance }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="6" class="empty">No invoices on this case.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2>Sessions recorded</h2>
+<table class="table">
+  <thead><tr><th>When</th><th>Who</th><th>What</th><th>Fee</th><th>Invoiced</th></tr></thead>
+  <tbody>
+    {% for session in sessions %}
+      <tr>
+        <td>{{ session.occurred_on }}</td>
+        <td>{{ session.counselee.full_name }}</td>
+        <td>{{ session.get_kind_display }}</td>
+        <td class="amount">{{ session.display_fee }}
+          {% if not session.is_billable %}<span class="muted">{{ session.waived_reason }}</span>{% endif %}</td>
+        <td>{% if session.is_invoiced %}yes{% else %}not yet{% endif %}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="5" class="empty">No sessions recorded yet. One is raised when an
+        appointment is closed out.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if can_raise %}
+  <div class="actions">
+    <a class="button" href="{% url 'billing:invoice_create' case.pk %}">Raise an invoice</a>
+    <a href="{% url 'billing:index' %}">Back to billing</a>
+  </div>
+{% endif %}
+{% endblock %}

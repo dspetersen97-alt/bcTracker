@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Cancel an appointment — bcTracker{% endblock %}
+
+{% block content %}
+<h1>Cancel this appointment?</h1>
+<p class="role">
+  {{ booking.starts_at|date:"l j F Y" }} at {{ booking.starts_at|time:"g:i a" }}
+  with {{ booking.counselor.full_name }}
+</p>
+
+{% if would_be_late %}
+  {% comment %} Said before the action, not after. Being told afterwards that something counted
+     as late notice would be a surprise, and this is not a refusal — it is
+     information. {% endcomment %}
+  <p class="notice">
+    This is less than {{ notice_hours }} hours away, so it will be recorded as short
+    notice. Please cancel anyway rather than not coming: your counselor would much
+    rather know.
+  </p>
+{% endif %}
+
+{% if booking.is_joint %}
+  <p class="notice">
+    Everyone on this case is expected at this appointment, so cancelling affects them
+    too. They will be emailed.
+  </p>
+{% endif %}
+
+<form method="post" class="stacked">
+  {% csrf_token %}
+  {% include "includes/form.html" %}
+  <div class="actions">
+    <button type="submit" class="danger">Yes, cancel it</button>
+    <a href="{% url 'scheduling:detail' booking.pk %}">Keep the appointment</a>
+  </div>
+</form>
+{% endblock %}

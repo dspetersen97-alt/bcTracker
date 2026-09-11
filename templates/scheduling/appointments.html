@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% load scheduling_tags %}
+{% block title %}Appointments — bcTracker{% endblock %}
+
+{% block content %}
+<h1>Appointments</h1>
+{% comment %} One page for both sides. The list is Booking.objects.for_actor, so a counselor
+   sees their caseload and a counselee sees their own without this template
+   knowing which. {% endcomment %}
+<p class="muted">Times are shown in your own timezone.</p>
+
+{% if is_counselor %}
+  <div class="actions">
+    <a class="button" href="{% url 'scheduling:availability' %}">My office hours</a>
+  </div>
+{% endif %}
+
+{% comment %} The way in to self-booking, on the page a counselee actually opens when they
+   want a next appointment. One button per case rather than one for the page,
+   because the times on offer are a particular counselor's office hours and there
+   is no sensible way to merge two counselors' diaries into one list. Populated
+   only for counselees; see the view. {% endcomment %}
+{% for case in bookable %}
+  <div class="actions">
+    <a class="button" href="{% url 'scheduling:book' case.pk %}">Book an appointment</a>
+    <span class="muted">with {{ case.counselor.full_name }}{% if bookable|length > 1 %} — {{ case.label }}{% endif %}</span>
+  </div>
+{% endfor %}
+
+<h2>Coming up</h2>
+<table class="table">
+  <thead>
+    <tr><th>When</th><th>Who</th><th>Case</th><th>Length</th><th>Status</th></tr>
+  </thead>
+  <tbody>
+    {% for booking in upcoming %}
+      <tr>
+        <td><a href="{% url 'scheduling:detail' booking.pk %}">{{ booking.starts_at|date:"D j M Y, g:i a" }}</a></td>
+        {% comment %} Not counselee.full_name: on a joint appointment that names another member
+           of the case. {% endcomment %}
+        <td>{% if is_counselor %}{{ booking|attendee_label:request.user }}{% else %}{{ booking.counselor.full_name }}{% endif %}</td>
+        <td>{{ booking.case.label }}</td>
+        <td>{{ booking.duration_minutes }} min</td>
+        <td class="status status-{{ booking.status }}">{{ booking.get_status_display }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="5" class="empty">Nothing booked.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2>Past</h2>
+<table class="table">
+  <thead>
+    <tr><th>When</th><th>Who</th><th>Case</th><th>Outcome</th></tr>
+  </thead>
+  <tbody>
+    {% for booking in past %}
+      <tr>
+        <td><a href="{% url 'scheduling:detail' booking.pk %}">{{ booking.starts_at|date:"D j M Y, g:i a" }}</a></td>
+        <td>{% if is_counselor %}{{ booking|attendee_label:request.user }}{% else %}{{ booking.counselor.full_name }}{% endif %}</td>
+        <td>{{ booking.case.label }}</td>
+        <td class="status status-{{ booking.status }}">
+          {{ booking.get_status_display }}
+          {% if booking.was_late_cancellation %}<span class="badge">late notice</span>{% endif %}
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="4" class="empty">Nothing yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

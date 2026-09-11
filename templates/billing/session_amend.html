@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Correct a session — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>Correct what this session is charged at</h1>
+  <p class="role">{{ session.get_kind_display }} on {{ session.occurred_on }} ·
+    {{ session.counselee.full_name }} · {{ session.case.label }}</p>
+
+  {% comment %} No note, no reason, nothing about the session itself — there is nowhere on a
+     SessionRecord for any of it, deliberately. See the model's docstring. {% endcomment %}
+  <dl class="detail-list">
+    <dt>Counselor</dt><dd>{{ session.counselor.full_name }}</dd>
+    <dt>Length</dt><dd>{{ session.duration_minutes }} minutes</dd>
+    <dt>Currently</dt><dd>{{ session.display_fee }}{% if not session.is_billable %}
+      — not being charged for ({{ session.waived_reason }}){% endif %}</dd>
+  </dl>
+
+  <form method="post">
+    {% csrf_token %}
+    {% include "includes/form.html" %}
+    <button type="submit">Save</button>
+  </form>
+
+  <p class="muted">Once this session is on an invoice the amount is fixed, because it
+    is a number the person paying has been told. Correcting it then means withdrawing
+    that invoice and raising another.</p>
+</div>
+{% endblock %}

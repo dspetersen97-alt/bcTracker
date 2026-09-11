@@ -1,0 +1,59 @@
+# Caddy terminates TLS and proxies to the app. Certificates are obtained and
+# renewed automatically via Let's Encrypt, which requires this host to be
+# reachable from the internet on ports 80 and 443.
+#
+# For a LAN-only deployment, replace the site address with the internal hostname
+# and add `tls internal` to use Caddy's local CA instead.
+
+{$SITE_HOSTNAME} {
+	encode zstd gzip
+
+	# Security headers. Django sets several of these too; having them here means
+	# they apply even to responses that bypass Django middleware.
+	header {
+		# Caddy's `header` replaces rather than appends, so this value
+		# wins over the one Django's middleware sets. It reads the same
+		# variable as SECURE_HSTS_SECONDS, with the same default, so
+		# there is one knob to turn when raising max-age after the
+		# deployment is known good.
+		Strict-Transport-Security "max-age={$SECURE_HSTS_SECONDS:3600}; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "same-origin"
+		# No third-party scripts, styles, or frames, and no inline anything.
+		# Documents are served as attachments, never rendered inline, so this
+		# can stay strict.
+		#
+		# MUST match CONTENT_SECURITY_POLICY in config/settings/base.py, which
+		# is where the reasoning for each directive is written down. Caddy's
+		# `header` replaces rather than appends, so this copy is the one a
+		# browser sees and a silent difference between the two would mean
+		# testing one policy and shipping another. tests/test_security_headers.py
+		# reads this file and fails if they drift.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		Permissions-Policy "accelerometer=(), camera=(), display-capture=(), geolocation=(), gyroscope=(), microphone=(), payment=(), usb=()"
+		Cross-Origin-Resource-Policy "same-origin"
+		# Do not advertise the server software.
+		-Server
+	}
+
+	# Documents can be large and are decrypted as they stream, so allow a
+	# generous read timeout on the proxy.
+	reverse_proxy web:8000 {
+		header_up X-Forwarded-Proto {scheme}
+		transport http {
+			read_timeout 120s
+		}
+	}
+
+	# Cap request bodies. The application enforces its own per-document limit;
+	# this stops an oversized upload before it reaches Python at all.
+	request_body {
+		max_size 30MB
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

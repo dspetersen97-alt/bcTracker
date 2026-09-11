@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% load document_tags %}
+{% block title %}{{ document.display_name }} — bcTracker{% endblock %}
+
+{% block content %}
+<h1>{{ document.display_name }}</h1>
+<p class="role"><a href="{% url 'documents:case_documents' document.case_id %}">{{ document.case.label }}</a></p>
+
+{% if document.has_thumbnail %}
+  <img class="preview" src="{% url 'documents:thumbnail' document.pk %}"
+       alt="Preview of {{ document.display_name }}" width="320">
+{% endif %}
+
+{% if document.description %}
+  <div class="card"><p>{{ document.description|linebreaksbr }}</p></div>
+{% endif %}
+
+<dl class="detail-list">
+  <dt>File</dt><dd>{{ document.original_filename }}</dd>
+  <dt>Kind</dt><dd>{{ document.get_kind_display }}</dd>
+  <dt>Size</dt><dd>{{ document.byte_size|filesizeformat }}</dd>
+  <dt>Uploaded by</dt><dd>{{ document|source_label:request.user }}</dd>
+  <dt>Uploaded</dt><dd>{{ document.created_at }}</dd>
+  <dt>Visible to</dt><dd>{{ document.get_visibility_display }}</dd>
+  {% comment %} Shown because "was this checked" is a fair question to be able to answer, and
+     because a SKIPPED status in production would be a problem worth noticing. {% endcomment %}
+  <dt>Virus scan</dt><dd>{{ document.get_scan_status_display }}</dd>
+</dl>
+
+<div class="actions">
+  <a class="button" href="{% url 'documents:download' document.pk %}">Download</a>
+  {% if can_change %}<a class="button" href="{% url 'documents:edit' document.pk %}">Edit details</a>{% endif %}
+  {% if can_share %}
+    {% comment %} One button, two directions: the label follows the current state so there is
+       never a "share" control on something already shared. {% endcomment %}
+    <form method="post" action="{% url 'documents:share' document.pk %}" class="inline-form">
+      {% csrf_token %}
+      <button type="submit">
+        {% if document.is_shared_with_the_case %}Stop sharing with the case{% else %}Share with the whole case{% endif %}
+      </button>
+    </form>
+  {% endif %}
+  {% if can_delete %}
+    <form method="post" action="{% url 'documents:delete' document.pk %}" class="inline-form">
+      {% csrf_token %}
+      <button type="submit" class="danger">Withdraw</button>
+    </form>
+  {% endif %}
+</div>
+
+<p class="muted">Every download of this document is recorded.</p>
+{% endblock %}

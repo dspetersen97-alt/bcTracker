@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Calendar exception — bcTracker{% endblock %}
+
+{% block content %}
+<h1>A closure, or extra time</h1>
+
+<form method="post" class="stacked">
+  {% csrf_token %}
+  {% include "includes/form.html" %}
+  <div class="actions">
+    <button type="submit">Save</button>
+    <a href="{% url 'scheduling:availability' %}">Cancel</a>
+  </div>
+</form>
+
+<div class="card">
+  <h2>The three shapes</h2>
+  <ul>
+    <li><strong>Closed all day</strong> — leave both times blank and leave the box unticked.</li>
+    <li><strong>Closed for part of a day</strong> — give the times, leave the box unticked.</li>
+    <li><strong>Extra time</strong> — give the times and tick the box.</li>
+  </ul>
+  <p class="muted">
+    These combine. Closing a whole day and then opening 4pm to 5pm means the office is
+    shut except for that one appointment.
+  </p>
+  <p class="muted">
+    Appointments already booked are not cancelled by a closure. You will still see
+    them in your diary, and cancelling one is a separate decision.
+  </p>
+</div>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Practice settings — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>Practice settings</h1>
+  <p class="muted">These decide the appointment slots counselees are offered.</p>
+  <form method="post">
+    {% csrf_token %}
+    {% include "includes/form.html" %}
+    <button type="submit">Save</button>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Add a rate — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>Add a rate</h1>
+  <p class="role"><a href="{% url 'billing:fees' %}">Fee schedule</a></p>
+
+  {% comment %} Said here because it is the thing people get wrong about this page: they look
+     for an Edit button, and there is none. A rate is a historical fact — see
+     FeeForm's docstring. {% endcomment %}
+  <p class="notice">To change what the ministry charges, add a rate from the date the
+    change takes effect. The old rate stays on the record so invoices raised against
+    it can still be explained.</p>
+
+  <form method="post">
+    {% csrf_token %}
+    {% include "includes/form.html" %}
+    <button type="submit">Add the rate</button>
+  </form>
+</div>
+{% endblock %}

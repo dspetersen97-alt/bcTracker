@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}{{ thread.subject }} — bcTracker{% endblock %}
+
+{% block content %}
+<h1>{{ thread.subject }}</h1>
+<p class="role">
+  <a href="{% url 'messaging:case_threads' thread.case.pk %}">{{ thread.case.label }}</a> ·
+  {% for person in participants %}{% if not forloop.first %} and {% endif %}{{ person.full_name }}{% endfor %}
+  {% if not thread.is_open %}<span class="badge">closed</span>{% endif %}
+</p>
+
+<ol class="conversation">
+  {% for message in conversation %}
+    <li class="said{% if message.author_id == user.pk %} said-by-me{% endif %}">
+      <p class="said-who">
+        {{ message.author.full_name }}
+        <span class="muted">{{ message.created_at|date:"j M Y, g:i a" }}</span>
+      </p>
+      {% comment %} linebreaksbr, not safe: a message is text a counselee typed, and it is
+         escaped by the template engine before this filter runs. {% endcomment %}
+      <p class="said-what">{{ message.body|linebreaksbr }}</p>
+      {% if message.attachments.all %}
+        {% comment %} The link text is the filename the sender chose, escaped by the engine.
+           No thumbnail and no preview: see the note on messaging.views.attachment. {% endcomment %}
+        <ul class="attachments">
+          {% for file in message.attachments.all %}
+            <li>
+              <a href="{% url 'messaging:attachment' file.pk %}">{{ file.original_filename }}</a>
+              <span class="muted">{{ file.byte_size|filesizeformat }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    </li>
+  {% endfor %}
+</ol>
+
+{% if can_reply %}
+  <form method="post" class="stacked" enctype="multipart/form-data">
+    {% csrf_token %}
+    {% include "includes/form.html" %}
+    <button type="submit">Send</button>
+  </form>
+{% elif not thread.is_open %}
+  <p class="notice">This conversation is closed. Nothing in it has been deleted.
+    {% if user.role == 'counselee' %}If there is more to say, mention it at your
+    next session and your counselor can reopen it.{% endif %}</p>
+{% elif user.role == 'admin' %}
+  {% comment %} The one page in the application an administrator can read and not write on.
+     Said out loud rather than left as a missing form. {% endcomment %}
+  <p class="notice">You can read this conversation. Replying in it is the
+    counselor's, not an administrator's.</p>
+{% endif %}
+
+<div class="actions">
+  {% if can_close %}
+    <form method="post" action="{% url 'messaging:close' thread.pk %}" class="inline-form">
+      {% csrf_token %}
+      <button type="submit">Close this conversation</button>
+    </form>
+  {% endif %}
+  {% if can_reopen %}
+    <form method="post" action="{% url 'messaging:reopen' thread.pk %}" class="inline-form">
+      {% csrf_token %}
+      <button type="submit">Reopen it</button>
+    </form>
+  {% endif %}
+  <a class="button" href="{% url 'messaging:index' %}">All messages</a>
+</div>
+{% endblock %}

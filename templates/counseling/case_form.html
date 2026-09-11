@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}{% if case %}Edit {{ case.label }}{% else %}Open a case{% endif %} — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>{% if case %}Edit case{% else %}Open a case{% endif %}</h1>
+  <form method="post">
+    {% csrf_token %}
+    {% include "includes/form.html" %}
+    <button type="submit">{% if case %}Save{% else %}Open case{% endif %}</button>
+  </form>
+</div>
+{% endblock %}

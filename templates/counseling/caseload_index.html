@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Caseloads — bcTracker{% endblock %}
+
+{% block content %}
+<h1>Caseloads</h1>
+<p class="muted">Counts for billing. Case notes and counselee documents are not
+  shown here and are not available to this role at all.</p>
+
+<table class="table">
+  <thead><tr><th>Counselor</th><th>Cases</th><th>Counselees</th></tr></thead>
+  <tbody>
+    {% for row in rows %}
+      <tr>
+        <td>{{ row.counselor__first_name }} {{ row.counselor__last_name }}</td>
+        <td>{{ row.case_count }}</td>
+        <td>{{ row.counselee_count }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="3" class="empty">No cases yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

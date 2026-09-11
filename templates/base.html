@@ -1,0 +1,75 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {# Counseling records must not be indexed or previewed by anything. #}
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="same-origin">
+  <title>{% block title %}bcTracker{% endblock %}</title>
+  {% comment %} External stylesheet, not a <style> block: the Content-Security-Policy in
+     compose/caddy/Caddyfile has no 'unsafe-inline', so inline CSS is blocked. {% endcomment %}
+  <link rel="stylesheet" href="{% static 'css/bctracker.css' %}">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <a class="brand" href="{% url 'counseling:dashboard' %}">bcTracker</a>
+    {% if user.is_authenticated %}
+      {% comment %} Navigation is built from the role, and each link's page checks the
+         permission again. Hiding a link is a courtesy, never the control. {% endcomment %}
+      <nav aria-label="Main">
+        {% if user.role == 'counselor' %}
+          <a href="{% url 'counseling:counselor_dashboard' %}">My caseload</a>
+          <a href="{% url 'scheduling:appointments' %}">Appointments</a>
+          {% include "messaging/includes/nav_link.html" %}
+          <a href="{% url 'scheduling:availability' %}">Office hours</a>
+          <a href="{% url 'counseling:counselor_profile_edit' %}">Practice settings</a>
+        {% elif user.role == 'admin' %}
+          <a href="{% url 'counseling:case_list' %}">Cases</a>
+          <a href="{% url 'scheduling:appointments' %}">Appointments</a>
+          <a href="{% url 'billing:index' %}">Billing</a>
+          <a href="{% url 'counseling:counselee_create' %}">New counselee</a>
+        {% elif user.role == 'financial_admin' %}
+          {% comment %} No appointments link. Billing reaches sessions through a case, not
+             through a ministry-wide diary — see scheduling.view_diary. {% endcomment %}
+          <a href="{% url 'billing:index' %}">Billing</a>
+          <a href="{% url 'counseling:caseload_index' %}">Caseloads</a>
+        {% else %}
+          <a href="{% url 'counseling:my_cases' %}">My counseling</a>
+          <a href="{% url 'scheduling:appointments' %}">My appointments</a>
+          {% include "messaging/includes/nav_link.html" %}
+          <a href="{% url 'documents:my_documents' %}">My documents</a>
+          <a href="{% url 'billing:my_invoices' %}">My invoices</a>
+          <a href="{% url 'counseling:counselee_profile_edit' %}">My details</a>
+        {% endif %}
+      </nav>
+      <nav aria-label="Account">
+        <span class="who">{{ user.email }}</span>
+        <a href="{% url 'accounts:home' %}">Account</a>
+        <form method="post" action="{% url 'accounts:logout' %}" class="inline-form">
+          {% csrf_token %}
+          <button type="submit" class="link-button">Sign out</button>
+        </form>
+      </nav>
+    {% endif %}
+  </header>
+
+  {% if messages %}
+    <ul class="messages" role="status">
+      {% for message in messages %}
+        <li class="message message-{{ message.tags }}">{{ message }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  <main id="main">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <p>Confidential. Sessions end automatically after a period of inactivity.</p>
+  </footer>
+</body>
+</html>

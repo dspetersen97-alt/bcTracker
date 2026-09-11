@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% load document_tags %}
+{% block title %}My documents — bcTracker{% endblock %}
+
+{% block content %}
+<h1>My documents</h1>
+<p>What you have sent your counselor, and what they have shared with you.</p>
+
+<table class="table">
+  <thead>
+    <tr><th></th><th>Name</th><th>Case</th><th>From</th><th>Added</th></tr>
+  </thead>
+  <tbody>
+    {% for document in documents %}
+      <tr>
+        <td class="thumb-cell">
+          {% if document.has_thumbnail %}
+            <img class="thumb" src="{% url 'documents:thumbnail' document.pk %}"
+                 alt="Preview of {{ document.display_name }}" width="60">
+          {% endif %}
+        </td>
+        <td><a href="{% url 'documents:detail' document.pk %}">{{ document.display_name }}</a></td>
+        <td><a href="{% url 'documents:case_documents' document.case_id %}">{{ document.case.label }}</a></td>
+        <td>{{ document|source_label:request.user }}</td>
+        <td>{{ document.created_at|date:"j M Y" }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="5" class="empty">Nothing yet. Open your case to send something.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

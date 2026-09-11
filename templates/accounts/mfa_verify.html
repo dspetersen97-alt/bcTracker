@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Enter your code — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>Enter your code</h1>
+  <p>Open your authenticator app and enter the six digits for bcTracker.</p>
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% include "includes/form.html" %}
+    <button type="submit" class="primary">Verify</button>
+  </form>
+
+  <p class="alt">Lost your authenticator? An administrator has to reset it for
+     you — that cannot be done from this page.</p>
+
+  <form method="post" action="{% url 'accounts:logout' %}" class="inline-form alt">
+    {% csrf_token %}
+    <button type="submit" class="link-button">Sign out</button>
+  </form>
+</div>
+{% endblock %}

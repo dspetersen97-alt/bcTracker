@@ -1,0 +1,133 @@
+# Production topology for a single TrueNAS SCALE host.
+#
+# Only Caddy publishes a port. The app, database, and scanner are reachable
+# solely on the internal network, which is what makes trusting Caddy's
+# X-Forwarded-* headers safe (see config/settings/prod.py).
+
+name: bctracker
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./compose/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data          # ACME account and certificates — persist this
+      - caddy_config:/config
+    environment:
+      # Used by the Caddyfile to request a certificate for the real hostname.
+      SITE_HOSTNAME: ${SITE_HOSTNAME:?set SITE_HOSTNAME in .env}
+      # Same variable the app reads for SECURE_HSTS_SECONDS. Caddy's header
+      # directive replaces Django's, so both must agree or the documented
+      # setting would be silently ineffective.
+      SECURE_HSTS_SECONDS: ${SECURE_HSTS_SECONDS:-3600}
+    depends_on:
+      web:
+        condition: service_healthy
+    networks: [internal]
+
+  web:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.prod
+      POSTGRES_HOST: db
+      DOCUMENT_STORE_ROOT: /var/lib/bctracker/documents
+      CLAMAV_HOST: clamav
+    volumes:
+      # Mount this on an encrypted TrueNAS dataset. Encryption at rest protects
+      # against a stolen or decommissioned drive, not a compromised host.
+      - documents:/var/lib/bctracker/documents
+    # Deliberately no dependency on clamav. Its first signature download takes
+    # minutes, and waiting for it would keep the whole site down while nothing but
+    # uploads actually needs it — those fail closed on their own until the scanner
+    # answers, which is the correct behaviour and a much smaller outage.
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [internal]
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-bctracker}
+      POSTGRES_USER: ${POSTGRES_USER:-bctracker}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      # Scrypt password storage for the database role itself.
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bctracker} -d ${POSTGRES_DB:-bctracker}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [internal]
+
+  # Scans every upload before it is encrypted and stored. Counselees upload from
+  # personal devices, so treating uploads as untrusted is the default.
+  clamav:
+    image: clamav/clamav:stable
+    restart: unless-stopped
+    volumes:
+      - clamav_db:/var/lib/clamav   # persist signatures so restarts are fast
+    healthcheck:
+      test: ["CMD-SHELL", "clamdcheck.sh || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 300s            # initial signature download is slow
+    networks: [internal]
+
+  # Scheduled work: appointment reminders, Google Calendar sync, backups.
+  # A cron sidecar rather than a task broker — nothing here is interactive, so
+  # Celery or django-q would be complexity without a matching benefit.
+  cron:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.prod
+      POSTGRES_HOST: db
+      DOCUMENT_STORE_ROOT: /var/lib/bctracker/documents
+      # Only this service mounts the backups volume, so only this service is
+      # configured to write to it: the web process has no reason to be able to
+      # produce a copy of the whole database.
+      BACKUP_ROOT: /var/lib/bctracker/backups
+    volumes:
+      - documents:/var/lib/bctracker/documents
+      - backups:/var/lib/bctracker/backups
+      - ./compose/cron/bctracker.cron:/etc/cron.d/bctracker:ro
+    # The cron daemon needs root, but each job line runs as the unprivileged
+    # bctracker user (see the user column in bctracker.cron), so scheduled work
+    # has no more privilege than the web process.
+    user: root
+    entrypoint: ["/app/compose/cron/entrypoint.sh"]
+    # The image's HEALTHCHECK probes the HTTP port, which this service does not
+    # serve, so it would sit permanently unhealthy and train everyone to ignore
+    # `docker compose ps`. Nothing useful replaces it: cron runs as PID 1, so if
+    # it dies the container exits and restart policy handles it, and a failing
+    # job is only visible in the logs either way.
+    healthcheck:
+      disable: true
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [internal]
+
+volumes:
+  pgdata:
+  documents:
+  backups:
+  clamav_db:
+  caddy_data:
+  caddy_config:
+
+networks:
+  internal:
+    driver: bridge

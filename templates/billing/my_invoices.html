@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% load billing_tags %}
+{% block title %}My invoices — bcTracker{% endblock %}
+
+{% block content %}
+<h1>My invoices</h1>
+<p class="role">Your own invoices. Nobody else on your case can see them, and you
+  cannot see theirs.</p>
+
+{% if owed_cents %}
+  <p class="notice">You currently owe {{ owed_cents|cents }}.</p>
+{% endif %}
+
+<table class="table">
+  <thead>
+    <tr><th>Invoice</th><th>Issued</th><th>Due</th><th>Total</th><th>Balance</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for invoice in invoices %}
+      <tr>
+        <td><a href="{% url 'billing:invoice_detail' invoice.pk %}">{{ invoice.number }}</a>
+          {% if invoice.memo %}<span class="muted">{{ invoice.memo }}</span>{% endif %}</td>
+        <td>{{ invoice.issued_on|default:"—" }}</td>
+        <td>{{ invoice.due_on|default:"—" }}
+          {% if invoice.is_overdue %}<span class="badge">overdue</span>{% endif %}</td>
+        <td class="amount">{{ invoice.display_total }}</td>
+        <td class="amount">{{ invoice.display_balance }}</td>
+        <td class="row-actions">{{ invoice.get_status_display }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="6" class="empty">You have no invoices.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<p class="muted">If something on an invoice looks wrong, say so — the office can
+  withdraw it and raise a corrected one. Please do not send card details by email or
+  in a message.</p>
+{% endblock %}

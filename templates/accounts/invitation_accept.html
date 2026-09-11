@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Set your password — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>Set your password</h1>
+  <p>Welcome. Choose a password for <strong>{{ invitee.email }}</strong>.</p>
+
+  <form method="post" action="{% url 'accounts:invitation_accept' token=token %}" novalidate>
+    {% csrf_token %}
+    {% include "includes/form.html" %}
+    <button type="submit" class="primary">Set password and sign in</button>
+  </form>
+</div>
+{% endblock %}

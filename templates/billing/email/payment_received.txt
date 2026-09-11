@@ -1,0 +1,16 @@
+{% autoescape off %}Hello{% if recipient.first_name %} {{ recipient.first_name }}{% endif %},
+
+Thank you — your card payment has gone through.
+
+  Invoice {{ number }}
+  Paid:        {{ amount }}
+  Outstanding: {{ balance }}
+
+{{ url }}
+
+This is your receipt; there is nothing further to do. Your card statement will
+show the ministry's name.
+
+bcTracker
+{{ site_url }}
+{% endautoescape %}

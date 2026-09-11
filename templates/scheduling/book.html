@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Book an appointment — bcTracker{% endblock %}
+
+{% block content %}
+<h1>Book an appointment</h1>
+<p class="role">
+  With {{ case.counselor.full_name }} ·
+  <a href="{% url 'counseling:case_detail' case.pk %}">{{ case.label }}</a>
+</p>
+
+{% if chosen and form %}
+  {# Step two. The time is fixed by now, so the only thing left is the note. #}
+  <div class="card">
+    <h2>{{ chosen|date:"l j F Y" }} at {{ chosen|time:"g:i a" }}</h2>
+    <p class="muted">{{ window.session_minutes }} minutes, shown in your timezone ({{ viewer_zone }}).</p>
+
+    <form method="post" class="stacked">
+      {% csrf_token %}
+      {% include "includes/form.html" %}
+      <div class="actions">
+        <button type="submit">Request this time</button>
+        <a href="{% url 'scheduling:book' case.pk %}?from={{ start_date|date:'Y-m-d' }}">Pick a different time</a>
+      </div>
+    </form>
+    <p class="muted">
+      Your counselor confirms appointments, so this is a request until they do. You
+      will get an email either way.
+    </p>
+  </div>
+{% elif not may_book %}
+  {% comment %} A counselor looking at what their counselee would see. Booking from here would
+     mean an appointment with themselves. {% endcomment %}
+  <p class="notice">
+    This is the list your counselees see. To put something in the diary yourself, use
+    <a href="{% url 'scheduling:schedule' case.pk %}">schedule an appointment</a>.
+  </p>
+{% endif %}
+
+{% if not chosen %}
+  {% if form %}
+    {% comment %} The chosen time fell through — taken, or no longer offered. The list below is
+       regenerated, so it no longer contains it. {% endcomment %}
+    <ul class="errors" role="alert">
+      {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+    </ul>
+  {% endif %}
+
+  <p class="muted">
+    Times are shown in your timezone ({{ viewer_zone }}). Appointments are
+    {{ window.session_minutes }} minutes and need at least {{ window.notice_hours }}
+    hours' notice.
+  </p>
+
+  <nav class="pager" aria-label="Weeks">
+    <a href="?from={{ previous_from|date:'Y-m-d' }}">Earlier</a>
+    <a href="?from={{ next_from|date:'Y-m-d' }}">Later</a>
+  </nav>
+
+  {% for day, day_slots in days %}
+    <section class="day">
+      <h2>{{ day|date:"l j F Y" }}</h2>
+      <ul class="slots">
+        {% for slot in day_slots %}
+          {% comment %} A link, not a form: choosing a time changes nothing yet, and a GET means
+             the back button works the way people expect it to. {% endcomment %}
+          <li>
+            <a class="button slot"
+               href="?slot={{ slot.start|date:'c'|urlencode }}&amp;from={{ start_date|date:'Y-m-d' }}">
+              {{ slot.start|time:"g:i a" }}
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% empty %}
+    {% comment %} Deliberately vague about *why*. "Your counselor is away" or "that hour is
+       taken" would both say something about somebody else's diary. {% endcomment %}
+    <p class="empty">
+      No times available in this period. Try a later week, or send your counselor a
+      message.
+    </p>
+  {% endfor %}
+{% endif %}
+{% endblock %}

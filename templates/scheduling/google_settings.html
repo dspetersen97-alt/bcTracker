@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Google Calendar — bcTracker{% endblock %}
+
+{% block content %}
+<h1>Google Calendar</h1>
+
+{% if not available %}
+  <p class="notice">
+    Google Calendar has not been set up on this server. An administrator needs to
+    configure it before counselors can connect.
+  </p>
+
+{% elif credential and credential.is_usable %}
+  <dl class="detail-list">
+    <dt>Connected account</dt><dd>{{ credential.google_email }}</dd>
+    <dt>Calendar</dt><dd>{{ credential.calendar_id }}</dd>
+    <dt>Last sent</dt>
+    <dd>
+      {% if credential.last_synced_at %}
+        {{ credential.last_synced_at|date:"j M Y, g:i a" }}
+      {% else %}
+        <span class="muted">Nothing sent yet.</span>
+      {% endif %}
+    </dd>
+  </dl>
+
+  {% if credential.last_error %}
+    <p class="notice">{{ credential.last_error }}</p>
+  {% endif %}
+
+  {% comment %} Stated on the page rather than left to the counselor to infer. If names are
+     on, the consequence is on a lock screen, and this is the last place it can be
+     said before it happens. {% endcomment %}
+  {% if shows_names %}
+    <p class="notice">
+      Counselee names <strong>are</strong> appearing in your Google calendar. Anyone
+      who can see that calendar — including a notification on a locked phone — can
+      read them.
+    </p>
+  {% else %}
+    <p class="muted">
+      Your Google events say only “{{ event_title }}” — no names, no notes, and
+      nobody is invited. Only the time is reserved.
+    </p>
+  {% endif %}
+
+  <form method="post" class="stacked">
+    {% csrf_token %}
+    {% include "includes/form.html" %}
+    <div class="actions">
+      <button type="submit">Save</button>
+    </div>
+  </form>
+
+  <div class="actions">
+    <form method="post" action="{% url 'scheduling:google_resync' %}" class="inline-form">
+      {% csrf_token %}
+      <button type="submit">Send my appointments now</button>
+    </form>
+    <form method="post" action="{% url 'scheduling:google_disconnect' %}" class="inline-form">
+      {% csrf_token %}
+      <button type="submit" class="danger">Disconnect</button>
+    </form>
+  </div>
+
+{% else %}
+  {% if credential %}
+    {% comment %} Revoked rather than never connected. Kept visible on purpose: a counselor
+       who thinks they are connected needs to be told they are not. {% endcomment %}
+    <p class="notice">
+      Your connection to {{ credential.google_email }} has stopped working.
+      {{ credential.last_error }}
+    </p>
+  {% endif %}
+
+  <p>
+    Connecting your Google calendar does two things: your bcTracker appointments
+    appear there, and times when you are busy in Google stop being offered to
+    counselees.
+  </p>
+  <ul class="next-steps">
+    <li>Your events carry no names and no notes — only the time is reserved.</li>
+    <li>Nobody is invited to them, so no counselee receives a Google invitation.</li>
+    <li>bcTracker reads only whether you are free or busy, never what you are doing.</li>
+    <li>Appointments are only ever written by bcTracker. Editing an event in Google
+      will not change the appointment, and bcTracker will put it back.</li>
+  </ul>
+
+  {% if workspace_domain %}
+    <p class="muted">Use your {{ workspace_domain }} account. A personal account will be refused.</p>
+  {% endif %}
+
+  <div class="actions">
+    <form method="post" action="{% url 'scheduling:google_connect' %}" class="inline-form">
+      {% csrf_token %}
+      <button type="submit">Connect Google Calendar</button>
+    </form>
+    <a href="{% url 'scheduling:availability' %}">Back to my office hours</a>
+  </div>
+{% endif %}
+{% endblock %}

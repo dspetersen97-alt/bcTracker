@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Schedule an appointment — bcTracker{% endblock %}
+
+{% block content %}
+<h1>Schedule an appointment</h1>
+<p class="role"><a href="{% url 'counseling:case_detail' case.pk %}">{{ case.label }}</a></p>
+
+<form method="post" class="stacked">
+  {% csrf_token %}
+  {% include "includes/form.html" %}
+  <div class="actions">
+    <button type="submit">Book it</button>
+    <a href="{% url 'scheduling:case_appointments' case.pk %}">Cancel</a>
+  </div>
+</form>
+
+<div class="card">
+  <p class="muted">
+    Give the time in your own timezone. You are not limited to your published office
+    hours here — that list exists to tell counselees what to ask for, not to stop you
+    fitting somebody in. You will still be stopped from booking over something already
+    in your diary, or over an appointment the counselee has elsewhere.
+  </p>
+  <p class="muted">
+    Booking on someone's behalf confirms the appointment straight away, and everyone
+    attending is emailed.
+  </p>
+</div>
+{% endblock %}
