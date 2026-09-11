@@ -1,9 +1,13 @@
 """
 Document routes.
 
-Documents are addressed by their own primary key rather than nested under a case
+Documents are addressed by their own public id rather than nested under a case
 path. The scoping layer is what decides reachability, so a case id in the URL
 would be decoration — and decoration that invites a view to trust it.
+
+``publicid`` rather than ``int``: the ten random digits are what appears in a URL
+anywhere in this application, and the converter refuses the sequential id the
+row's primary key still is. See apps/core/ids.py.
 """
 
 from django.urls import path

@@ -1,7 +1,7 @@
 """
 Billing routes.
 
-An invoice is addressed by its own primary key with no case in the path, the same as
+An invoice is addressed by its own public id with no case in the path, the same as
 a document and a thread: the scoping layer decides reachability, so a case id in the
 URL would be decoration that invites a view to trust it. The two routes nested under
 a case are the ones whose subject is the case — its list of invoices, and raising a

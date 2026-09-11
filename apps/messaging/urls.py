@@ -1,7 +1,7 @@
 """
 Messaging routes.
 
-A thread is addressed by its own primary key, with no case in the path, for the
+A thread is addressed by its own public id, with no case in the path, for the
 reason documents/urls.py gives: the scoping layer decides reachability, so a case
 id in the URL would be decoration that invites a view to trust it. The two routes
 that *are* nested under a case are the ones whose subject is the case — its list
