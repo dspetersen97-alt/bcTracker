@@ -9,19 +9,24 @@ venv/
 
 # Django
 *.log
-staticfiles/
+/staticfiles/
 local_settings.py
 
 # Secrets — never commit. See .env.example for the required keys.
 .env
 .env.*
 !.env.example
-secrets/
+/secrets/
 
-# Counselee data must never reach the repo.
-documents/
-media/
-backups/
+# Counselee data must never reach the repo. These are the runtime directories at
+# the root of the checkout, and the leading slash is load-bearing: an unanchored
+# `documents/` matches a directory of that name at ANY depth, which silently
+# swallowed the whole of apps/documents/ and templates/documents/ — 24 source
+# files that were never committed and whose absence first showed up as an isort
+# error in CI, because ruff could no longer resolve `apps.documents`.
+/documents/
+/media/
+/backups/
 
 # Tooling
 .pytest_cache/

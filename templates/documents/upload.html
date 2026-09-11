@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Upload — {{ case.label }} — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>Upload a document</h1>
+  <p class="role"><a href="{% url 'documents:case_documents' case.pk %}">{{ case.label }}</a></p>
+
+  {% if not may_share %}
+    {% comment %} Said plainly, because the alternative is someone assuming a spouse can see
+       what they sent. The visibility field is not on this form at all for a
+       counselee — see DocumentUploadForm. {% endcomment %}
+    <p class="notice">Only you and {{ case.counselor.full_name }} will be able to
+      see this. If it should be shared with everyone on the case, ask your
+      counselor to share it.</p>
+  {% endif %}
+
+  {# enctype matters: without it the browser posts filenames, not files. #}
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {% include "includes/form.html" %}
+    <button type="submit">Upload</button>
+  </form>
+
+  <p class="muted">Uploads are scanned and stored encrypted. PDFs, Word and Excel
+    files, plain text, and photos are accepted.</p>
+</div>
+{% endblock %}

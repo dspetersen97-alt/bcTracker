@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% load document_tags %}
+{% block title %}Documents — {{ case.label }} — bcTracker{% endblock %}
+
+{% block content %}
+<h1>Documents</h1>
+<p class="role"><a href="{% url 'counseling:case_detail' case.pk %}">{{ case.label }}</a></p>
+
+{% if can_upload %}
+  <div class="actions">
+    <a class="button" href="{% url 'documents:upload' case.pk %}">Upload a document</a>
+  </div>
+{% endif %}
+
+{% comment %} The list is Document.objects.for_actor, so a counselee's page holds their own
+   uploads and whatever the counselor shared with the case — and there is no
+   count of anything else, which would itself say something. {% endcomment %}
+<table class="table">
+  <thead>
+    <tr><th></th><th>Name</th><th>From</th><th>Kind</th><th>Added</th><th>Shared</th></tr>
+  </thead>
+  <tbody>
+    {% for document in documents %}
+      <tr>
+        <td class="thumb-cell">
+          {% if document.has_thumbnail %}
+            <img class="thumb" src="{% url 'documents:thumbnail' document.pk %}"
+                 alt="Preview of {{ document.display_name }}" width="60">
+          {% endif %}
+        </td>
+        <td><a href="{% url 'documents:detail' document.pk %}">{{ document.display_name }}</a></td>
+        {# Not owner.full_name: on a shared case that would name the other counselee. #}
+        <td>{{ document|source_label:request.user }}</td>
+        <td>{{ document.get_kind_display }}</td>
+        <td>{{ document.created_at|date:"j M Y" }}</td>
+        <td>{% if document.is_shared_with_the_case %}Whole case{% else %}Counselor only{% endif %}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="6" class="empty">Nothing here yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

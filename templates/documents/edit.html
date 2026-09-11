@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ document.display_name }} — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>Edit details</h1>
+  <p class="role">{{ document.original_filename }}</p>
+  {% comment %} Only the description around a document is editable. Replacing the bytes would
+     mean the sha256 and the audit trail described something that no longer
+     exists, so a correction is a new upload. {% endcomment %}
+  <form method="post">
+    {% csrf_token %}
+    {% include "includes/form.html" %}
+    <button type="submit">Save</button>
+    <a href="{% url 'documents:detail' document.pk %}">Cancel</a>
+  </form>
+</div>
+{% endblock %}
