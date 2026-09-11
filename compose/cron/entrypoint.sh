@@ -20,22 +20,15 @@ chmod 0644 /etc/cron.d/bctracker-active
 chown root:root /etc/cron.d/bctracker-active
 rm -f "$CRONTAB" 2>/dev/null || true
 
-# The scheduled jobs need the same environment the web container gets. cron
-# starts jobs with a near-empty environment, so export the relevant variables
-# into a file cron reads. Secrets are written to a root-owned file inside the
-# container only.
+# The scheduled jobs need the same configuration the web container gets, and cron
+# hands them almost none of it. render-env.sh turns this container's environment
+# into crontab assignment lines, and explains why it passes everything through
+# rather than naming the variables it knows about. Secrets land in a root-owned
+# file inside the container only.
 {
     echo "SHELL=/bin/sh"
     echo "PATH=/usr/local/bin:/usr/bin:/bin"
-    for var in DJANGO_SETTINGS_MODULE DJANGO_SECRET_KEY DJANGO_ALLOWED_HOSTS \
-               DJANGO_CSRF_TRUSTED_ORIGINS POSTGRES_DB POSTGRES_USER \
-               POSTGRES_PASSWORD POSTGRES_HOST POSTGRES_PORT \
-               BCTRACKER_MASTER_KEY DOCUMENT_STORE_ROOT ORG_TIME_ZONE \
-               EMAIL_HOST EMAIL_PORT EMAIL_HOST_USER EMAIL_HOST_PASSWORD \
-               DEFAULT_FROM_EMAIL LOG_LEVEL; do
-        eval "value=\${$var:-}"
-        [ -n "$value" ] && echo "$var=$value"
-    done
+    "$(dirname "$0")/render-env.sh"
 } > /etc/environment.cron
 chmod 0600 /etc/environment.cron
 

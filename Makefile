@@ -26,6 +26,7 @@ help:
 	@echo "  check         Everything CI runs"
 	@echo ""
 	@echo "Deployment"
+	@echo "  (first install: sh scripts/bootstrap.sh --help)"
 	@echo "  docker-build  Build the application image"
 	@echo "  docker-up     Start the full stack"
 	@echo "  docker-down   Stop the stack"
@@ -99,5 +100,9 @@ docker-down:
 docker-logs:
 	docker compose logs -f
 
+# In the cron service, not web: the backups volume is mounted there and only
+# there, and BACKUP_ROOT is set there and only there. Run this in web and it writes
+# an encrypted copy of the whole database into the container's own filesystem,
+# where it survives until the next rebuild and is on no volume anybody replicates.
 backup:
-	docker compose exec web python manage.py backup_database
+	docker compose exec cron python manage.py backup_database

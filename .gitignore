@@ -28,6 +28,14 @@ local_settings.py
 /media/
 /backups/
 
+# Written by scripts/bootstrap.sh, and each describes one host rather than the
+# application: which encrypted dataset the volumes live on, and whether TLS comes
+# from Let's Encrypt or Caddy's internal CA. Committing either would put one
+# ministry's layout in everybody's checkout, and would make an upgrade a merge
+# conflict against a local edit.
+/docker-compose.override.yml
+/compose/caddy/Caddyfile.local
+
 # Tooling
 .pytest_cache/
 .ruff_cache/

@@ -145,6 +145,23 @@ what ships.
 
 ## Deployment
 
+**For a first install, follow [`docs/deployment.md`](docs/deployment.md)** — the
+ordered runbook, from datasets and DNS through the first accounts, the scheduled
+jobs, and upgrades. What follows here is the shape of the thing; that document is
+the sequence to do it in.
+
+```bash
+sudo sh scripts/bootstrap.sh --host counseling.example.org --admin you@example.org
+```
+
+That generates the three secrets, writes `.env` from `.env.example`, builds, starts,
+waits for the application to report healthy, and creates the first administrator.
+It will not invent a hostname and it leaves mail credentials **empty** rather than
+plausible — an unconfigured mailbox should raise on the first send, not deliver
+nowhere. `--help` lists the rest; `--print-config` shows what it would write.
+
+By hand, which is the same thing more slowly:
+
 ```bash
 cp .env.example .env         # fill in every value; set SITE_HOSTNAME
 make docker-build
@@ -352,6 +369,7 @@ apps/messaging/      case conversations — one counselor, one counselee, no edi
 apps/billing/        sessions, fee schedule, invoices, payments, stripe/
 apps/audit/          append-only accountability trail
 compose/             Caddyfile, container entrypoints, cron schedule
+scripts/             bootstrap.sh — first-install configuration and startup
 tests/               pytest suite; testapp/ holds test-only concrete models
 ```
 

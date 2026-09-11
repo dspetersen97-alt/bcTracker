@@ -83,28 +83,55 @@ def request_magic_link(*, email, request=None) -> None:
 
 def invite(*, user, request=None, invited_by=None) -> LoginToken:
     """Send someone the link they use to set their first password."""
+    token, _raw = issue_invitation(user=user, request=request, invited_by=invited_by)
+    return token
+
+
+def issue_invitation(*, user, send=True, request=None, invited_by=None) -> tuple[LoginToken, str]:
+    """Issue an invitation and return ``(token, raw_token)``.
+
+    ``invite()`` is the form to reach for; this one exists for its ``send=False``
+    case, which skips the email and hands the raw link back for delivery by hand.
+    That is for exactly one situation: the first administrator of a new
+    deployment, who has to exist before there is anybody who could configure
+    SMTP. Everywhere else the link should travel by email — a link a person
+    carries is a link that gets pasted into a chat window, and this one sets a
+    password.
+
+    The raw token exists only in the return value; what is stored is a digest, so
+    a caller that loses it has to issue a new invitation.
+    """
     token, raw = LoginToken.issue(
         user=user,
         purpose=TokenPurpose.INVITATION,
         ttl_seconds=settings.INVITATION_TTL_SECONDS,
         requested_ip=client_ip(request),
     )
-    _send_link_email(
-        user=user,
-        raw_token=raw,
-        url_name="accounts:invitation_accept",
-        subject="Set up your bcTracker account",
-        template="accounts/email/invitation",
-        expires_at=token.expires_at,
-    )
+    if send:
+        _send_link_email(
+            user=user,
+            raw_token=raw,
+            url_name="accounts:invitation_accept",
+            subject="Set up your bcTracker account",
+            template="accounts/email/invitation",
+            expires_at=token.expires_at,
+        )
     record(
         AuditVerb.INVITATION_SENT,
         actor=invited_by,
         target=user,
         request=request,
         token_id=token.pk,
+        # Recorded either way: the account can now be claimed by whoever holds the
+        # link, and how it got to them is part of that story.
+        emailed=send,
     )
-    return token
+    return token, raw
+
+
+def invitation_path(raw_token: str) -> str:
+    """The path an invitation link points at, for a caller that must print one."""
+    return reverse("accounts:invitation_accept", kwargs={"token": raw_token})
 
 
 def consume_token(*, raw_token, purpose, request=None):
