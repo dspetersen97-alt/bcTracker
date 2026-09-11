@@ -31,7 +31,7 @@
   {% include "includes/form.html" %}
   <div class="actions">
     <button type="submit" class="danger">Yes, cancel it</button>
-    <a href="{% url 'scheduling:detail' booking.pk %}">Keep the appointment</a>
+    <a href="{% url 'scheduling:detail' booking.public_id %}">Keep the appointment</a>
   </div>
 </form>
 {% endblock %}

@@ -45,7 +45,7 @@ def upload_payload(name="homework.pdf", data=PDF, **extra):
 
 
 def upload_url(case):
-    return reverse("documents:upload", kwargs={"case_pk": case.pk})
+    return reverse("documents:upload", kwargs={"case_public_id": case.public_id})
 
 
 @pytest.fixture
@@ -93,14 +93,16 @@ class TestFilingAnUploadAgainstASession:
         booking = make_booking(case, ada)
         sign_in(ada)
 
-        response = client.post(upload_url(case), upload_payload(booking=booking.pk))
+        response = client.post(upload_url(case), upload_payload(booking=booking.public_id))
 
         document = Document.objects.get()
         assert document.booking_id == booking.pk
         # Back to the appointment, where it now appears — the confirmation somebody
         # uploading homework actually wants.
         assert response.status_code == 302
-        assert response.headers["Location"] == reverse("scheduling:detail", args=[booking.pk])
+        assert response.headers["Location"] == reverse(
+            "scheduling:detail", args=[booking.public_id]
+        )
 
     def test_an_upload_with_no_session_still_belongs_to_the_case(
         self, client, sign_in, couple_case
@@ -113,7 +115,7 @@ class TestFilingAnUploadAgainstASession:
 
         assert Document.objects.get().booking_id is None
         assert response.headers["Location"] == reverse(
-            "documents:case_documents", kwargs={"case_pk": case.pk}
+            "documents:case_documents", kwargs={"case_public_id": case.public_id}
         )
 
     def test_the_form_says_which_session_it_is_for(
@@ -123,12 +125,12 @@ class TestFilingAnUploadAgainstASession:
         booking = make_booking(case, ada)
         sign_in(ada)
 
-        page = client.get(f"{upload_url(case)}?booking={booking.pk}").content.decode()
+        page = client.get(f"{upload_url(case)}?booking={booking.public_id}").content.decode()
 
         assert "For your appointment on" in page
         # The hidden field is what carries it through the POST; without it the link
         # would be lost the moment the form is submitted.
-        assert f'name="booking" value="{booking.pk}"' in page
+        assert f'name="booking" value="{booking.public_id}"' in page
 
     def test_a_counselor_can_send_a_handout_for_a_session_too(
         self, client, sign_in, couple_case, counselor, make_booking
@@ -145,7 +147,7 @@ class TestFilingAnUploadAgainstASession:
                 kind="handout",
                 # The counselor's form has this field; a counselee's does not.
                 visibility=Visibility.CASE_SHARED,
-                booking=booking.pk,
+                booking=booking.public_id,
             ),
         )
 
@@ -170,7 +172,7 @@ class TestTheLinkIsNotARoute:
         elsewhere = make_booking(other_case, ada)
         sign_in(ada)
 
-        client.post(upload_url(case), upload_payload(booking=elsewhere.pk))
+        client.post(upload_url(case), upload_payload(booking=elsewhere.public_id))
 
         document = Document.objects.get()
         assert document.case_id == case.pk
@@ -189,7 +191,7 @@ class TestTheLinkIsNotARoute:
         bens = make_booking(case, ben)
         sign_in(ada)
 
-        client.post(upload_url(case), upload_payload(booking=bens.pk))
+        client.post(upload_url(case), upload_payload(booking=bens.public_id))
 
         assert Document.objects.get().booking_id is None
 
@@ -210,11 +212,13 @@ class TestWhatTheSessionPageShows:
         case, ada, _ben = couple_case
         booking = make_booking(case, ada)
         sign_in(ada)
-        client.post(upload_url(case), upload_payload(name="week-one.pdf", booking=booking.pk))
+        client.post(
+            upload_url(case), upload_payload(name="week-one.pdf", booking=booking.public_id)
+        )
         client.logout()
         sign_in(counselor)
 
-        page = client.get(reverse("scheduling:detail", args=[booking.pk])).content.decode()
+        page = client.get(reverse("scheduling:detail", args=[booking.public_id])).content.decode()
 
         assert "week-one.pdf" in page
 
@@ -229,11 +233,13 @@ class TestWhatTheSessionPageShows:
         case, ada, ben = couple_case
         booking = make_booking(case, ada, attendance=Attendance.WHOLE_CASE)
         sign_in(ada)
-        client.post(upload_url(case), upload_payload(name="ada-only.pdf", booking=booking.pk))
+        client.post(
+            upload_url(case), upload_payload(name="ada-only.pdf", booking=booking.public_id)
+        )
         client.logout()
         sign_in(ben)
 
-        page = client.get(reverse("scheduling:detail", args=[booking.pk]))
+        page = client.get(reverse("scheduling:detail", args=[booking.public_id]))
 
         assert page.status_code == 200
         assert "ada-only.pdf" not in page.content.decode()
@@ -250,11 +256,13 @@ class TestWhatTheSessionPageShows:
         case, ada, _ben = couple_case
         booking = make_booking(case, ada)
         sign_in(ada)
-        client.post(upload_url(case), upload_payload(name="disclosure.pdf", booking=booking.pk))
+        client.post(
+            upload_url(case), upload_payload(name="disclosure.pdf", booking=booking.public_id)
+        )
         client.logout()
         sign_in(financial_admin)
 
-        page = client.get(reverse("scheduling:detail", args=[booking.pk]))
+        page = client.get(reverse("scheduling:detail", args=[booking.public_id]))
 
         assert page.status_code == 200
         body = page.content.decode()
@@ -275,8 +283,8 @@ class TestWhatTheDiaryOffers:
 
         # Past as well as future: homework is handed in after the meeting more
         # often than before it.
-        assert f"{upload_url(case)}?booking={upcoming.pk}" in page
-        assert f"{upload_url(case)}?booking={past.pk}" in page
+        assert f"{upload_url(case)}?booking={upcoming.public_id}" in page
+        assert f"{upload_url(case)}?booking={past.public_id}" in page
 
     def test_the_counselor_is_offered_it_too(
         self, client, sign_in, couple_case, counselor, make_booking
@@ -287,4 +295,4 @@ class TestWhatTheDiaryOffers:
 
         page = client.get(reverse("scheduling:appointments")).content.decode()
 
-        assert f"{upload_url(case)}?booking={booking.pk}" in page
+        assert f"{upload_url(case)}?booking={booking.public_id}" in page

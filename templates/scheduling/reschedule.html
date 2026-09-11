@@ -12,7 +12,7 @@
   {% include "includes/form.html" %}
   <div class="actions">
     <button type="submit">Move it</button>
-    <a href="{% url 'scheduling:detail' booking.pk %}">Leave it where it is</a>
+    <a href="{% url 'scheduling:detail' booking.public_id %}">Leave it where it is</a>
   </div>
 </form>
 

@@ -6,7 +6,7 @@
   <h1>Add a counselee to {{ case.label }}</h1>
   <p class="muted">After this they can see this case. Only counselees who already
     have an account appear below —
-    <a href="{% url 'counseling:counselee_create' %}?case={{ case.pk }}">create the
+    <a href="{% url 'counseling:counselee_create' %}?case={{ case.public_id }}">create the
     account first</a> if they are new.</p>
   <form method="post">
     {% csrf_token %}

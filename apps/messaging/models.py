@@ -54,7 +54,7 @@ from django.db.models.functions import Coalesce
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.models import TimeStampedModel
+from apps.core.models import PublicIdModel, TimeStampedModel
 from apps.core.scoping import ActorScopedQuerySet, CaseScopedQuerySet
 from apps.documents.models import ScanStatus
 
@@ -107,7 +107,7 @@ class ThreadManager(models.Manager.from_queryset(ThreadQuerySet)):
         return self.get_queryset().for_actor(user)
 
 
-class Thread(TimeStampedModel):
+class Thread(PublicIdModel, TimeStampedModel):
     case = models.ForeignKey(
         "counseling.Case",
         on_delete=models.PROTECT,
@@ -258,7 +258,7 @@ class MessageAttachmentManager(models.Manager.from_queryset(MessageAttachmentQue
         return self.get_queryset().for_actor(user)
 
 
-class MessageAttachment(TimeStampedModel):
+class MessageAttachment(PublicIdModel, TimeStampedModel):
     """A file sent with a message. Encrypted on disk under an opaque UUID.
 
     Deliberately narrower than ``Document``: no title, no description, no kind, no

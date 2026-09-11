@@ -29,6 +29,7 @@ from apps.core.downloads import (
     inline_file_response,
     may_be_shown_inline,
 )
+from apps.core.ids import looks_like_public_id
 from apps.counseling.models import Case
 from apps.documents import services
 from apps.documents.crypto import DecryptionError
@@ -39,19 +40,24 @@ from apps.scheduling.models import Booking
 logger = logging.getLogger(__name__)
 
 
-def visible_case_or_404(request, pk):
-    return get_object_or_404(Case.objects.for_actor(request.user), pk=pk)
+def visible_case_or_404(request, public_id):
+    return get_object_or_404(Case.objects.for_actor(request.user), public_id=public_id)
 
 
-def visible_document_or_404(request, pk):
+def visible_document_or_404(request, public_id):
     """The single door onto a Document.
 
     ``for_actor`` is what makes "a spouse cannot reach the other's private
     upload" true by construction: the row is not in the queryset, so this is a
     404 and the document's existence is never confirmed.
+
+    Keyed by ``public_id``, which is what the routes carry — the primary key of a
+    document is never published, so a link to one cannot be turned into a link to the
+    next one by adding one. See ``apps/core/ids.py``.
     """
     return get_object_or_404(
-        Document.objects.for_actor(request.user).select_related("case", "owner"), pk=pk
+        Document.objects.for_actor(request.user).select_related("case", "owner"),
+        public_id=public_id,
     )
 
 
@@ -69,14 +75,14 @@ def require_perm(request, perm, obj=None):
 
 
 @login_required
-def case_documents(request, case_pk):
+def case_documents(request, case_public_id):
     """Everything on a case that this actor may see.
 
     The template is given the scoped queryset and nothing else — no total, no
     "3 hidden" — because a count is content: it would tell a counselee that their
     spouse has sent something, which is precisely what visibility protects.
     """
-    case = visible_case_or_404(request, case_pk)
+    case = visible_case_or_404(request, case_public_id)
     require_perm(request, "documents.view_case_documents", case)
 
     documents = (
@@ -130,15 +136,15 @@ def session_being_uploaded_for(request, case):
     because a stale link was followed would be the wrong way round.
     """
     raw = request.POST.get("booking") or request.GET.get("booking") or ""
-    if not raw.isdigit():
+    if not looks_like_public_id(raw):
         return None
-    return Booking.objects.for_actor(request.user).filter(case=case, pk=raw).first()
+    return Booking.objects.for_actor(request.user).filter(case=case, public_id=raw).first()
 
 
 @login_required
 @require_http_methods(["GET", "POST"])
-def upload(request, case_pk):
-    case = visible_case_or_404(request, case_pk)
+def upload(request, case_public_id):
+    case = visible_case_or_404(request, case_public_id)
     require_perm(request, "documents.add_document", case)
 
     # Only the counselor decides what the whole case sees, so the visibility field
@@ -181,8 +187,8 @@ def upload(request, case_pk):
             # page then shows the document filed against that session, which is
             # the confirmation somebody uploading homework actually wants.
             if booking:
-                return redirect("scheduling:detail", pk=booking.pk)
-            return redirect("documents:case_documents", case_pk=case.pk)
+                return redirect("scheduling:detail", public_id=booking.public_id)
+            return redirect("documents:case_documents", case_public_id=case.public_id)
 
     return render(
         request,
@@ -192,8 +198,8 @@ def upload(request, case_pk):
 
 
 @login_required
-def detail(request, pk):
-    document = visible_document_or_404(request, pk)
+def detail(request, public_id):
+    document = visible_document_or_404(request, public_id)
     require_perm(request, "documents.view_document", document)
     record(
         AuditVerb.DOCUMENT_VIEWED,
@@ -215,13 +221,13 @@ def detail(request, pk):
 
 
 @login_required
-def download(request, pk):
+def download(request, public_id):
     """Stream the decrypted document.
 
     The permission check and the audit row are inside ``open_document`` rather than
     here, so nothing can serve a document without recording that it did.
     """
-    document = visible_document_or_404(request, pk)
+    document = visible_document_or_404(request, public_id)
 
     try:
         frames = services.open_document(document, actor=request.user, request=request)
@@ -244,7 +250,7 @@ def download(request, pk):
 
 
 @login_required
-def preview(request, pk):
+def preview(request, public_id):
     """Serve the document for the browser to render, rather than to save.
 
     The counselor's actual request: read what was sent in without a folder full of
@@ -260,7 +266,7 @@ def preview(request, pk):
     than a silent fallback to a download, because a page that offers "View" and
     quietly saves a file instead has told the user something untrue.
     """
-    document = visible_document_or_404(request, pk)
+    document = visible_document_or_404(request, public_id)
 
     try:
         frames = services.open_document(document, actor=request.user, request=request)
@@ -284,14 +290,14 @@ def preview(request, pk):
 
 
 @login_required
-def thumbnail(request, pk):
+def thumbnail(request, public_id):
     """The decrypted preview for an image, served inline.
 
     Inline is safe here and only here: the bytes are a JPEG we produced ourselves
     by re-encoding through Pillow, so the content type is a fact rather than a
     claim. Nothing the uploader sent survives into this response.
     """
-    document = visible_document_or_404(request, pk)
+    document = visible_document_or_404(request, public_id)
     require_perm(request, "documents.view_document", document)
 
     if not document.has_thumbnail:
@@ -311,8 +317,8 @@ def thumbnail(request, pk):
 
 @login_required
 @require_http_methods(["GET", "POST"])
-def edit(request, pk):
-    document = visible_document_or_404(request, pk)
+def edit(request, public_id):
+    document = visible_document_or_404(request, public_id)
     require_perm(request, "documents.change_document", document)
 
     form = DocumentEditForm(request.POST or None, instance=document)
@@ -327,20 +333,20 @@ def edit(request, pk):
             fields=sorted(form.changed_data),
         )
         messages.success(request, _("Saved."))
-        return redirect("documents:detail", pk=document.pk)
+        return redirect("documents:detail", public_id=document.public_id)
 
     return render(request, "documents/edit.html", {"form": form, "document": document})
 
 
 @login_required
 @require_POST
-def share(request, pk):
+def share(request, public_id):
     """Share a document with everyone on the case, or take it back.
 
     One view for both directions because they are one decision with two settings,
     and splitting them would let a template offer the wrong one.
     """
-    document = visible_document_or_404(request, pk)
+    document = visible_document_or_404(request, public_id)
     require_perm(request, "documents.share_document", document)
 
     if document.is_shared_with_the_case:
@@ -355,16 +361,16 @@ def share(request, pk):
                 "anyone who reads it keeps what they have read."
             ),
         )
-    return redirect("documents:detail", pk=document.pk)
+    return redirect("documents:detail", public_id=document.public_id)
 
 
 @login_required
 @require_POST
-def delete(request, pk):
-    document = visible_document_or_404(request, pk)
+def delete(request, public_id):
+    document = visible_document_or_404(request, public_id)
     require_perm(request, "documents.delete_document", document)
 
-    case_pk = document.case_id
+    case_public_id = document.case.public_id
     services.soft_delete_document(document, actor=request.user, request=request)
     messages.success(request, _("Withdrawn. Your counselor has a record that it existed."))
-    return redirect("documents:case_documents", case_pk=case_pk)
+    return redirect("documents:case_documents", case_public_id=case_public_id)

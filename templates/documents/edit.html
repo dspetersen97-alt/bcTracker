@@ -12,7 +12,7 @@
     {% csrf_token %}
     {% include "includes/form.html" %}
     <button type="submit">Save</button>
-    <a href="{% url 'documents:detail' document.pk %}">Cancel</a>
+    <a href="{% url 'documents:detail' document.public_id %}">Cancel</a>
   </form>
 </div>
 {% endblock %}

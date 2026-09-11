@@ -4,7 +4,7 @@
 
 {% block content %}
 <h1>{{ document.display_name }}</h1>
-<p class="role"><a href="{% url 'documents:case_documents' document.case_id %}">{{ document.case.label }}</a></p>
+<p class="role"><a href="{% url 'documents:case_documents' document.case.public_id %}">{{ document.case.label }}</a></p>
 
 {% comment %} An image is shown at full size rather than as the 320px thumbnail: this is the
    page somebody opened to read the thing. Non-image types are offered as a link instead,
@@ -12,10 +12,10 @@
    (frame-src 'none', object-src 'none') and relaxing that for a viewer is not a trade
    worth making — a new tab renders the same bytes with the same protections. {% endcomment %}
 {% if document.is_viewable_in_a_browser and document.is_image %}
-  <img class="preview" src="{% url 'documents:preview' document.pk %}"
+  <img class="preview" src="{% url 'documents:preview' document.public_id %}"
        alt="{{ document.display_name }}">
 {% elif document.has_thumbnail %}
-  <img class="preview" src="{% url 'documents:thumbnail' document.pk %}"
+  <img class="preview" src="{% url 'documents:thumbnail' document.public_id %}"
        alt="Preview of {{ document.display_name }}" width="320">
 {% endif %}
 
@@ -37,15 +37,15 @@
 
 <div class="actions">
   {% if document.is_viewable_in_a_browser and not document.is_image %}
-    <a class="button" href="{% url 'documents:preview' document.pk %}"
+    <a class="button" href="{% url 'documents:preview' document.public_id %}"
        target="_blank" rel="noopener">View in the browser</a>
   {% endif %}
-  <a class="button" href="{% url 'documents:download' document.pk %}">Download</a>
-  {% if can_change %}<a class="button" href="{% url 'documents:edit' document.pk %}">Edit details</a>{% endif %}
+  <a class="button" href="{% url 'documents:download' document.public_id %}">Download</a>
+  {% if can_change %}<a class="button" href="{% url 'documents:edit' document.public_id %}">Edit details</a>{% endif %}
   {% if can_share %}
     {% comment %} One button, two directions: the label follows the current state so there is
        never a "share" control on something already shared. {% endcomment %}
-    <form method="post" action="{% url 'documents:share' document.pk %}" class="inline-form">
+    <form method="post" action="{% url 'documents:share' document.public_id %}" class="inline-form">
       {% csrf_token %}
       <button type="submit">
         {% if document.is_shared_with_the_case %}Stop sharing with the case{% else %}Share with the whole case{% endif %}
@@ -53,7 +53,7 @@
     </form>
   {% endif %}
   {% if can_delete %}
-    <form method="post" action="{% url 'documents:delete' document.pk %}" class="inline-form">
+    <form method="post" action="{% url 'documents:delete' document.public_id %}" class="inline-form">
       {% csrf_token %}
       <button type="submit" class="danger">Withdraw</button>
     </form>

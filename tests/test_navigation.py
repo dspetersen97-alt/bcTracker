@@ -69,7 +69,7 @@ class TestACounseleeCanFindTheirWayToBooking:
 
         markup = markup_of(client, landing_pages)
 
-        assert reverse("scheduling:book", args=[joels_case.pk]) in markup, (
+        assert reverse("scheduling:book", args=[joels_case.public_id]) in markup, (
             "a counselee has no way to book an appointment except by typing the URL"
         )
 
@@ -83,7 +83,7 @@ class TestACounseleeCanFindTheirWayToBooking:
 
         response = client.get(reverse("scheduling:appointments"))
 
-        assert reverse("scheduling:book", args=[joels_case.pk]) in response.content.decode()
+        assert reverse("scheduling:book", args=[joels_case.public_id]) in response.content.decode()
 
     def test_the_link_leads_somewhere_that_answers(
         self, client, sign_in, joel, joels_case, landing_pages
@@ -92,7 +92,7 @@ class TestACounseleeCanFindTheirWayToBooking:
         sign_in(joel)
         markup_of(client, landing_pages)
 
-        response = client.get(reverse("scheduling:book", args=[joels_case.pk]))
+        response = client.get(reverse("scheduling:book", args=[joels_case.public_id]))
 
         assert response.status_code == 200
 
@@ -106,7 +106,7 @@ class TestACounseleeCanFindTheirWayToBooking:
 
         markup = markup_of(client, landing_pages)
 
-        assert reverse("scheduling:book", args=[joels_case.pk]) not in markup
+        assert reverse("scheduling:book", args=[joels_case.public_id]) not in markup
 
     def test_a_case_on_hold_is_not_offered(self, client, sign_in, joel, joels_case, landing_pages):
         """On hold means the counseling has paused. Writing stays open; booking does not."""
@@ -116,8 +116,8 @@ class TestACounseleeCanFindTheirWayToBooking:
 
         markup = markup_of(client, landing_pages)
 
-        assert reverse("scheduling:book", args=[joels_case.pk]) not in markup
-        assert reverse("messaging:start", args=[joels_case.pk]) in markup
+        assert reverse("scheduling:book", args=[joels_case.public_id]) not in markup
+        assert reverse("messaging:start", args=[joels_case.public_id]) in markup
 
     def test_a_former_member_is_offered_nothing(
         self, client, sign_in, joel, joels_case, landing_pages
@@ -130,7 +130,7 @@ class TestACounseleeCanFindTheirWayToBooking:
 
         markup = markup_of(client, landing_pages)
 
-        assert reverse("scheduling:book", args=[joels_case.pk]) not in markup
+        assert reverse("scheduling:book", args=[joels_case.public_id]) not in markup
 
 
 class TestACounselorIsOfferedTheirOwnRoutes:
@@ -144,7 +144,7 @@ class TestACounselorIsOfferedTheirOwnRoutes:
 
         markup = client.get(reverse("scheduling:appointments")).content.decode()
 
-        assert reverse("scheduling:book", args=[joels_case.pk]) not in markup
+        assert reverse("scheduling:book", args=[joels_case.public_id]) not in markup
 
     def test_they_can_reach_office_hours_and_the_case_diary(
         self, client, sign_in, counselor, joels_case
@@ -155,12 +155,12 @@ class TestACounselorIsOfferedTheirOwnRoutes:
             client,
             [
                 reverse("scheduling:appointments"),
-                reverse("counseling:case_detail", args=[joels_case.pk]),
+                reverse("counseling:case_detail", args=[joels_case.public_id]),
             ],
         )
 
         assert reverse("scheduling:availability") in markup
-        assert reverse("scheduling:case_appointments", args=[joels_case.pk]) in markup
+        assert reverse("scheduling:case_appointments", args=[joels_case.public_id]) in markup
 
     def test_the_case_diary_leads_to_scheduling_somebody_in(
         self, client, sign_in, counselor, joels_case
@@ -168,10 +168,10 @@ class TestACounselorIsOfferedTheirOwnRoutes:
         sign_in(counselor)
 
         markup = client.get(
-            reverse("scheduling:case_appointments", args=[joels_case.pk])
+            reverse("scheduling:case_appointments", args=[joels_case.public_id])
         ).content.decode()
 
-        assert reverse("scheduling:schedule", args=[joels_case.pk]) in markup
+        assert reverse("scheduling:schedule", args=[joels_case.public_id]) in markup
 
 
 @pytest.fixture
@@ -236,7 +236,7 @@ class TestBillingIsReachableByClicking:
 
         markup = markup_of(client, [reverse("billing:index")])
 
-        assert reverse("billing:invoice_create", args=[joels_case.pk]) in markup
+        assert reverse("billing:invoice_create", args=[joels_case.public_id]) in markup
 
     def test_an_admin_can_reach_billing_too(self, client, sign_in, admin_user):
         """Deliberately both roles: a ministry too small for a bookkeeper still bills."""
@@ -250,9 +250,9 @@ class TestBillingIsReachableByClicking:
         """The counselor's route: they are asked about a bill, in the room."""
         sign_in(counselor)
 
-        markup = markup_of(client, [reverse("counseling:case_detail", args=[joels_case.pk])])
+        markup = markup_of(client, [reverse("counseling:case_detail", args=[joels_case.public_id])])
 
-        assert reverse("billing:case_invoices", args=[joels_case.pk]) in markup
+        assert reverse("billing:case_invoices", args=[joels_case.public_id]) in markup
 
     def test_a_counselee_can_find_their_own_invoices(
         self, client, sign_in, joel, joels_case, joels_invoice
@@ -269,7 +269,7 @@ class TestBillingIsReachableByClicking:
 
         markup = markup_of(client, [reverse("billing:my_invoices")])
 
-        assert reverse("billing:invoice_detail", args=[joels_invoice.pk]) in markup
+        assert reverse("billing:invoice_detail", args=[joels_invoice.public_id]) in markup
 
     def test_the_office_can_reach_an_outstanding_invoice_from_the_billing_page(
         self, client, sign_in, financial_admin, joels_invoice
@@ -278,7 +278,7 @@ class TestBillingIsReachableByClicking:
 
         markup = markup_of(client, [reverse("billing:index")])
 
-        assert reverse("billing:invoice_detail", args=[joels_invoice.pk]) in markup
+        assert reverse("billing:invoice_detail", args=[joels_invoice.public_id]) in markup
 
     def test_an_invoice_offers_the_actions_the_office_needs(
         self, client, sign_in, financial_admin, joels_invoice
@@ -287,10 +287,12 @@ class TestBillingIsReachableByClicking:
         actually does, and neither has any other entry point."""
         sign_in(financial_admin)
 
-        markup = markup_of(client, [reverse("billing:invoice_detail", args=[joels_invoice.pk])])
+        markup = markup_of(
+            client, [reverse("billing:invoice_detail", args=[joels_invoice.public_id])]
+        )
 
-        assert reverse("billing:payment_record", args=[joels_invoice.pk]) in markup
-        assert reverse("billing:invoice_void", args=[joels_invoice.pk]) in markup
+        assert reverse("billing:payment_record", args=[joels_invoice.public_id]) in markup
+        assert reverse("billing:invoice_void", args=[joels_invoice.public_id]) in markup
 
     def test_an_unpriced_session_is_offered_a_correction(
         self, client, sign_in, financial_admin, joels_case, joel
@@ -306,7 +308,7 @@ class TestBillingIsReachableByClicking:
 
         markup = markup_of(client, [reverse("billing:index")])
 
-        assert reverse("billing:session_amend", args=[session.pk]) in markup
+        assert reverse("billing:session_amend", args=[session.public_id]) in markup
 
 
 class TestTheHomePageAndTheSidebar:

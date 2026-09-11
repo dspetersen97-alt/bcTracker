@@ -7,17 +7,20 @@ invoice ever raised, and it would not show up as an error — it would show up a
 ministry that quietly charged the wrong number.
 
 The numbering tests are here rather than with the invoice lifecycle because what
-they assert is a property of the Postgres sequence and not of an invoice: uniqueness
-under concurrency, and a gap being acceptable. See apps/billing/numbering.py.
+they assert is a property of the reference itself and not of an invoice: that it is
+short enough to read aloud, that it carries the ministry's prefix, and that it is the
+same ten digits as the invoice's URL. See apps/billing/numbering.py.
 """
 
 from decimal import Decimal
 
 import pytest
-from django.db import connection
 
 from apps.billing import money
-from apps.billing.numbering import SEQUENCE_NAME, next_invoice_number
+from apps.billing.models import Invoice
+from apps.billing.numbering import invoice_number_for, invoice_prefix
+from apps.core.ids import generate_public_id
+from apps.counseling.models import Case
 
 
 class TestToCents:
@@ -94,43 +97,56 @@ class TestFormatting:
         assert money.format_cents(8500) == "£85.00"
 
 
-@pytest.mark.django_db
 class TestInvoiceNumbering:
+    """The printed reference. See apps/billing/numbering.py for why it is the
+    invoice's public id rather than a counter of its own."""
+
     def test_it_looks_like_a_reference_somebody_can_read_aloud(self, settings):
         settings.BILLING_INVOICE_PREFIX = "BC"
 
-        number = next_invoice_number()
+        number = invoice_number_for("4820193756")
 
-        assert number.startswith("BC-")
-        assert len(number) == len("BC-000001")
-
-    def test_every_number_is_different(self):
-        numbers = [next_invoice_number() for _ in range(25)]
-
-        assert len(set(numbers)) == 25
+        assert number == "BC-4820193756"
 
     def test_the_prefix_is_the_ministrys(self, settings):
         settings.BILLING_INVOICE_PREFIX = "GRACE"
 
-        assert next_invoice_number().startswith("GRACE-")
+        assert invoice_number_for(generate_public_id()).startswith("GRACE-")
 
-    def test_a_rolled_back_transaction_leaves_a_gap_and_not_a_collision(self):
-        """The trade this design makes, asserted so it reads as a decision.
+    def test_a_ministry_that_set_no_prefix_still_gets_one(self, settings):
+        """Empty rather than absent is the state a half-filled .env leaves, and an
+        invoice numbered "-4820193756" would look like a bug to the person paying."""
+        settings.BILLING_INVOICE_PREFIX = ""
 
-        ``nextval`` is not transactional, so a number consumed by work that is undone
-        is gone. That is the right way round: a gap is explainable to an accountant,
-        two invoices with the same number are not.
-        """
-        with connection.cursor() as cursor:
-            # S608: the interpolated name is a module constant, not input.
-            cursor.execute(f"SELECT last_value FROM {SEQUENCE_NAME}")  # noqa: S608
-            (before,) = cursor.fetchone()
+        assert invoice_prefix() == "BC"
 
-        next_invoice_number()
+    def test_every_number_is_different(self):
+        """A property of the id, not of a sequence: nothing is read before a value is
+        chosen, so there is no read-then-write race for two staff to lose."""
+        numbers = [invoice_number_for(generate_public_id()) for _ in range(25)]
 
-        with connection.cursor() as cursor:
-            # S608: the interpolated name is a module constant, not input.
-            cursor.execute(f"SELECT last_value FROM {SEQUENCE_NAME}")  # noqa: S608
-            (after,) = cursor.fetchone()
+        assert len(set(numbers)) == 25
 
-        assert after > before
+    @pytest.mark.django_db
+    def test_an_invoice_is_numbered_with_its_own_public_id(self, counselor, counselee):
+        """The point of the whole arrangement: the reference on the bill and the id in
+        the URL are the same digits, so a payer quoting one can be found by the other."""
+        case = Case.objects.create(counselor=counselor, label="Ashford — individual")
+
+        invoice = Invoice.objects.create(case=case, counselee=counselee)
+
+        assert invoice.number == f"{invoice_prefix()}-{invoice.public_id}"
+
+    @pytest.mark.django_db
+    def test_a_reissued_invoice_keeps_the_reference_it_went_out_with(self, counselor, counselee):
+        """Saving an invoice again must not renumber it. A payment quoting the old
+        reference would otherwise match nothing."""
+        case = Case.objects.create(counselor=counselor, label="Ashford — individual")
+        invoice = Invoice.objects.create(case=case, counselee=counselee)
+        was = invoice.number
+
+        invoice.memo = "Sessions for March"
+        invoice.save()
+        invoice.refresh_from_db()
+
+        assert invoice.number == was

@@ -372,7 +372,7 @@ class TestNotifications:
 
         services.post_message(thread, author=counselor, body="Have a look.")
 
-        assert f"https://counseling.example.org/messages/{thread.pk}/" in mail.outbox[0].body
+        assert f"https://counseling.example.org/messages/{thread.public_id}/" in mail.outbox[0].body
 
     def test_a_failed_send_does_not_lose_the_message(self, settings, thread, counselor):
         settings.EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
@@ -391,7 +391,7 @@ class TestThroughTheViews:
         sign_in(counselee)
 
         started = client.post(
-            reverse("messaging:start", kwargs={"case_pk": case.pk}),
+            reverse("messaging:start", kwargs={"case_public_id": case.public_id}),
             {"subject": "A question", "body": "Could we go over page two?"},
         )
         assert started.status_code == 302
@@ -400,7 +400,7 @@ class TestThroughTheViews:
         client.post(reverse("accounts:logout"))
         sign_in(counselor)
         replied = client.post(
-            reverse("messaging:thread", kwargs={"pk": thread.pk}),
+            reverse("messaging:thread", kwargs={"public_id": thread.public_id}),
             {"body": "Yes, bring it with you."},
         )
 
@@ -416,7 +416,7 @@ class TestThroughTheViews:
         sign_in(counselor)
 
         response = client.post(
-            reverse("messaging:start", kwargs={"case_pk": case.pk}),
+            reverse("messaging:start", kwargs={"case_public_id": case.public_id}),
             {"counselee": spouse.pk, "subject": "Homework", "body": "Here is this week's."},
         )
 
@@ -432,7 +432,7 @@ class TestThroughTheViews:
     ):
         sign_in(counselee)
 
-        response = client.get(reverse("messaging:start", kwargs={"case_pk": case.pk}))
+        response = client.get(reverse("messaging:start", kwargs={"case_public_id": case.public_id}))
 
         assert "counselee" not in response.context["form"].fields
 
@@ -441,7 +441,7 @@ class TestThroughTheViews:
     ):
         sign_in(counselor)
 
-        client.get(reverse("messaging:thread", kwargs={"pk": thread.pk}))
+        client.get(reverse("messaging:thread", kwargs={"public_id": thread.public_id}))
 
         assert AuditEvent.objects.filter(
             verb=AuditVerb.THREAD_VIEWED, actor=counselor, target_id=str(thread.pk)
@@ -451,7 +451,9 @@ class TestThroughTheViews:
     def test_an_empty_reply_is_a_form_error_not_a_message(self, client, sign_in, thread, counselor):
         sign_in(counselor)
 
-        response = client.post(reverse("messaging:thread", kwargs={"pk": thread.pk}), {"body": " "})
+        response = client.post(
+            reverse("messaging:thread", kwargs={"public_id": thread.public_id}), {"body": " "}
+        )
 
         assert response.status_code == 200
         assert response.context["form"].errors
@@ -462,7 +464,7 @@ class TestThroughTheViews:
         assert case.status == CaseStatus.CLOSED
         sign_in(counselee)
 
-        response = client.get(reverse("messaging:start", kwargs={"case_pk": case.pk}))
+        response = client.get(reverse("messaging:start", kwargs={"case_public_id": case.public_id}))
 
         assert response.status_code == 403
 
@@ -473,7 +475,8 @@ class TestThroughTheViews:
         sign_in(counselor)
 
         response = client.post(
-            reverse("messaging:thread", kwargs={"pk": thread.pk}), {"body": "One more thing."}
+            reverse("messaging:thread", kwargs={"public_id": thread.public_id}),
+            {"body": "One more thing."},
         )
 
         assert response.status_code == 403

@@ -54,7 +54,7 @@ EXEMPT_PREFIXES = {
 #: ``kwargs`` is either a dict or a callable taking the ``scenario`` namespace —
 #: a case belonging to the acting counselor, with the acting counselee on it —
 #: and returning the dict. Callable form is what lets a route be exercised with a
-#: pk the actor can legitimately reach.
+#: public id the actor can legitimately reach.
 MATRIX = {
     "healthz": (
         {},
@@ -243,7 +243,7 @@ MATRIX = {
         },
     ),
     "counseling:case_detail": (
-        lambda s: {"pk": s.case.pk},
+        lambda s: {"public_id": s.case.public_id},
         "get",
         # Everyone connected to the case may read the page; what differs is what
         # is on it. The counselee's own case and financial_admin's billing view
@@ -252,7 +252,7 @@ MATRIX = {
         {"anonymous": 302} | dict.fromkeys(SIGNED_IN, 200),
     ),
     "counseling:case_edit": (
-        lambda s: {"pk": s.case.pk},
+        lambda s: {"public_id": s.case.public_id},
         "get",
         {
             "anonymous": 302,
@@ -263,7 +263,7 @@ MATRIX = {
         },
     ),
     "counseling:case_close": (
-        lambda s: {"pk": s.case.pk},
+        lambda s: {"public_id": s.case.public_id},
         "post",
         {
             "anonymous": 302,
@@ -275,7 +275,7 @@ MATRIX = {
     ),
     # --- counseling: membership -------------------------------------------
     "counseling:case_member_add": (
-        lambda s: {"pk": s.case.pk},
+        lambda s: {"public_id": s.case.public_id},
         "get",
         # Administrator only, including against the case's own counselor: adding a
         # member is the action in this app with a real disclosure consequence.
@@ -288,7 +288,7 @@ MATRIX = {
         },
     ),
     "counseling:case_member_end": (
-        lambda s: {"pk": s.case.pk, "member_pk": s.member.pk},
+        lambda s: {"public_id": s.case.public_id, "member_public_id": s.member.public_id},
         "post",
         {
             "anonymous": 302,
@@ -311,7 +311,7 @@ MATRIX = {
         },
     ),
     "counseling:counselee_detail": (
-        lambda s: {"pk": s.counselee.pk},
+        lambda s: {"public_id": s.counselee.public_id},
         "get",
         # One person's file: sessions, documents, and notes on one page. Staff who
         # counsel, and nobody else.
@@ -351,7 +351,7 @@ MATRIX = {
         {"anonymous": 302, "counselee": 200} | dict.fromkeys(STAFF, 403),
     ),
     "counseling:counselee_profile_edit_for": (
-        lambda s: {"pk": s.profile.pk},
+        lambda s: {"public_id": s.profile.public_id},
         "get",
         # financial_admin is refused: a date of birth and an emergency contact are
         # not billing data. Counselee is refused because their own page has no id.
@@ -388,7 +388,7 @@ MATRIX = {
         },
     ),
     "documents:case_documents": (
-        lambda s: {"case_pk": s.case.pk},
+        lambda s: {"case_public_id": s.case.public_id},
         "get",
         {
             "anonymous": 302,
@@ -399,7 +399,7 @@ MATRIX = {
         },
     ),
     "documents:upload": (
-        lambda s: {"case_pk": s.case.pk},
+        lambda s: {"case_public_id": s.case.public_id},
         "get",
         # A counselee uploading is half the product — the two-way exchange the
         # instruction document asks for — so 200 here is a feature, not a leniency.
@@ -412,7 +412,7 @@ MATRIX = {
         },
     ),
     "documents:detail": (
-        lambda s: {"pk": s.document.pk},
+        lambda s: {"public_id": s.document.public_id},
         "get",
         {
             "anonymous": 302,
@@ -423,7 +423,7 @@ MATRIX = {
         },
     ),
     "documents:download": (
-        lambda s: {"pk": s.document.pk},
+        lambda s: {"public_id": s.document.public_id},
         "get",
         # A real decryption, from a blob the scenario fixture actually wrote. A 404
         # here for the connected actors would mean the store or the key is wrong,
@@ -437,7 +437,7 @@ MATRIX = {
         },
     ),
     "documents:preview": (
-        lambda s: {"pk": s.document.pk},
+        lambda s: {"public_id": s.document.public_id},
         "get",
         # The same disclosure as a download and therefore the same column, which is
         # the point: "view" is not a lesser permission. The scenario's document is a
@@ -452,7 +452,7 @@ MATRIX = {
         },
     ),
     "documents:thumbnail": (
-        lambda s: {"pk": s.document.pk},
+        lambda s: {"public_id": s.document.public_id},
         "get",
         {
             "anonymous": 302,
@@ -463,7 +463,7 @@ MATRIX = {
         },
     ),
     "documents:edit": (
-        lambda s: {"pk": s.document.pk},
+        lambda s: {"public_id": s.document.public_id},
         "get",
         # The uploader may relabel their own file. Only the label: the bytes are
         # not replaceable, because the recorded hash describes what was uploaded.
@@ -476,7 +476,7 @@ MATRIX = {
         },
     ),
     "documents:share": (
-        lambda s: {"pk": s.document.pk},
+        lambda s: {"public_id": s.document.public_id},
         "post",
         # The counselee owns this document and is still refused. Publishing to the
         # whole case is the counselor's decision alone — on a family case the
@@ -490,7 +490,7 @@ MATRIX = {
         },
     ),
     "documents:delete": (
-        lambda s: {"pk": s.document.pk},
+        lambda s: {"public_id": s.document.public_id},
         "post",
         # Withdrawing is allowed to the uploader, and it is a soft delete: the
         # counselor keeps a record that the document existed.
@@ -524,7 +524,7 @@ MATRIX = {
         },
     ),
     "messaging:case_threads": (
-        lambda s: {"case_pk": s.case.pk},
+        lambda s: {"case_public_id": s.case.public_id},
         "get",
         {
             "anonymous": 302,
@@ -535,7 +535,7 @@ MATRIX = {
         },
     ),
     "messaging:start": (
-        lambda s: {"case_pk": s.case.pk},
+        lambda s: {"case_public_id": s.case.public_id},
         "get",
         # An admin is refused here and served on every reading route above. They
         # oversee the ministry; they are not a party to the counseling, and the
@@ -549,7 +549,7 @@ MATRIX = {
         },
     ),
     "messaging:thread": (
-        lambda s: {"pk": s.thread.pk},
+        lambda s: {"public_id": s.thread.public_id},
         "get",
         {
             "anonymous": 302,
@@ -560,7 +560,7 @@ MATRIX = {
         },
     ),
     "messaging:attachment": (
-        lambda s: {"pk": s.attachment.pk},
+        lambda s: {"public_id": s.attachment.public_id},
         "get",
         # Identical to the messaging:thread row above, and that identity is the
         # point: an attachment has no audience of its own, so a file is reachable by
@@ -575,7 +575,7 @@ MATRIX = {
         },
     ),
     "messaging:close": (
-        lambda s: {"pk": s.thread.pk},
+        lambda s: {"public_id": s.thread.public_id},
         "post",
         # The counselee started this conversation and still cannot close it: the
         # thread is the channel their counselor reaches them on.
@@ -591,7 +591,7 @@ MATRIX = {
         # The *closed* thread, so this row asserts a reopening that works rather
         # than a permission that cannot apply — the same reason the scenario
         # carries a second booking in the past.
-        lambda s: {"pk": s.closed_thread.pk},
+        lambda s: {"public_id": s.closed_thread.public_id},
         "post",
         {
             "anonymous": 302,
@@ -605,7 +605,7 @@ MATRIX = {
     #
     # None of these routes carries a counselor id, so they cannot be pointed at
     # somebody else's diary — the same construction as the practice-settings page,
-    # and the reason an admin gets 403 rather than a way in. The rows keyed by a pk
+    # and the reason an admin gets 403 rather than a way in. The rows keyed by a public id
     # are 404 for every actor but the owning counselor: apps/scheduling/views.py's
     # ``own_availability_or_404`` filters on ``counselor=request.user`` on top of
     # the scoping queryset, because that queryset deliberately lets a counselee
@@ -633,7 +633,7 @@ MATRIX = {
         },
     ),
     "scheduling:availability_edit": (
-        lambda s: {"pk": s.rule.pk},
+        lambda s: {"public_id": s.rule.public_id},
         "get",
         {
             "anonymous": 302,
@@ -644,7 +644,7 @@ MATRIX = {
         },
     ),
     "scheduling:availability_delete": (
-        lambda s: {"pk": s.rule.pk},
+        lambda s: {"public_id": s.rule.public_id},
         "post",
         {
             "anonymous": 302,
@@ -666,7 +666,7 @@ MATRIX = {
         },
     ),
     "scheduling:override_delete": (
-        lambda s: {"pk": s.override.pk},
+        lambda s: {"public_id": s.override.public_id},
         "post",
         {
             "anonymous": 302,
@@ -685,7 +685,7 @@ MATRIX = {
     # diary (a caseload-shaped disclosure) or any action, and no template on a
     # route it can reach renders a note. See apps/scheduling/rules.py.
     "scheduling:book": (
-        lambda s: {"case_pk": s.case.pk},
+        lambda s: {"case_public_id": s.case.public_id},
         "get",
         # A counselee choosing their own time is the point of the feature. A
         # counselor gets the page too, read-only, to see what is on offer; the
@@ -699,7 +699,7 @@ MATRIX = {
         },
     ),
     "scheduling:schedule": (
-        lambda s: {"case_pk": s.case.pk},
+        lambda s: {"case_public_id": s.case.public_id},
         "get",
         # The counselor's own way in, not bound by the published hours. A counselee
         # is refused: booking outside what is offered is not theirs to do.
@@ -725,21 +725,21 @@ MATRIX = {
         },
     ),
     "scheduling:case_appointments": (
-        lambda s: {"case_pk": s.case.pk},
+        lambda s: {"case_public_id": s.case.public_id},
         "get",
         # Keyed by a case and gated on counseling.view_case, so everyone who can
         # read the case can read its sessions. This is billing's route.
         {"anonymous": 302} | dict.fromkeys(SIGNED_IN, 200),
     ),
     "scheduling:detail": (
-        lambda s: {"pk": s.booking.pk},
+        lambda s: {"public_id": s.booking.public_id},
         "get",
         # 200 for financial_admin, and the note is withheld by show_notes rather
         # than by hiding the page — asserted in tests/test_scheduling_access.py.
         {"anonymous": 302} | dict.fromkeys(SIGNED_IN, 200),
     ),
     "scheduling:confirm": (
-        lambda s: {"pk": s.booking.pk},
+        lambda s: {"public_id": s.booking.public_id},
         "post",
         # Accepting a request is the counselor's decision. A counselee confirming
         # their own request would make the requested state meaningless.
@@ -752,7 +752,7 @@ MATRIX = {
         },
     ),
     "scheduling:cancel": (
-        lambda s: {"pk": s.booking.pk},
+        lambda s: {"public_id": s.booking.public_id},
         "get",
         # Both sides may cancel; the counselee's is the whole point of self-booking.
         {
@@ -764,7 +764,7 @@ MATRIX = {
         },
     ),
     "scheduling:reschedule": (
-        lambda s: {"pk": s.booking.pk},
+        lambda s: {"public_id": s.booking.public_id},
         "get",
         # Refused to the counselee on purpose: rescheduling bypasses the office
         # hours, so their route is to cancel and book again from what is offered.
@@ -779,7 +779,7 @@ MATRIX = {
     "scheduling:outcome": (
         # The past booking, because record_outcome requires the appointment to
         # have happened — a future one is 403 even for its own counselor.
-        lambda s: {"pk": s.past_booking.pk},
+        lambda s: {"public_id": s.past_booking.public_id},
         "get",
         {
             "anonymous": 302,
@@ -794,7 +794,7 @@ MATRIX = {
         # wait for the session. The admin 403 is the deliberate asymmetry —
         # view_booking_note lets them read one, change_booking_note does not let
         # them write one.
-        lambda s: {"pk": s.booking.pk},
+        lambda s: {"public_id": s.booking.public_id},
         "get",
         {
             "anonymous": 302,
@@ -808,7 +808,7 @@ MATRIX = {
     #
     # The admin 403 on all five is the point, and it is the only place in this
     # matrix where an admin is excluded from something a counselor can do without
-    # a pk being involved. An administrator who could arrange where a counselor's
+    # an id being involved. An administrator who could arrange where a counselor's
     # appointment times are sent could send them to a calendar the counselor does
     # not read. See the note on manage_own_google_calendar in scheduling/rules.py.
     #
@@ -921,7 +921,7 @@ MATRIX = {
         },
     ),
     "billing:fee_end": (
-        lambda s: {"pk": s.fee.pk},
+        lambda s: {"public_id": s.fee.public_id},
         "post",
         # 403 rather than 404 for the two refused roles because the permission is
         # checked before the row is looked up: a rate list is ministry configuration,
@@ -938,7 +938,7 @@ MATRIX = {
         # The session left off every invoice on purpose. change_session is refused
         # once a session is on a live invoice, so pointing this row at an invoiced one
         # would assert a 403 that says nothing about the role.
-        lambda s: {"pk": s.session.pk},
+        lambda s: {"public_id": s.session.public_id},
         "get",
         # 403, not 404: a counselor and the counselee can both legitimately see this
         # session — it is their case and their hour — so the refusal is about the
@@ -952,7 +952,7 @@ MATRIX = {
         },
     ),
     "billing:case_invoices": (
-        lambda s: {"case_pk": s.case.pk},
+        lambda s: {"case_public_id": s.case.public_id},
         "get",
         # Keyed by a case and gated on it, like scheduling:case_appointments: everyone
         # connected to the case reaches the page and what is on it differs. A
@@ -961,7 +961,7 @@ MATRIX = {
         {"anonymous": 302} | dict.fromkeys(SIGNED_IN, 200),
     ),
     "billing:invoice_create": (
-        lambda s: {"case_pk": s.case.pk},
+        lambda s: {"case_public_id": s.case.public_id},
         "get",
         {
             "anonymous": 302,
@@ -979,12 +979,12 @@ MATRIX = {
     "billing:invoice_detail": (
         # The issued one. A draft is refused to the payer, which is a different
         # assertion and belongs in tests/test_billing_access.py.
-        lambda s: {"pk": s.invoice.pk},
+        lambda s: {"public_id": s.invoice.public_id},
         "get",
         {"anonymous": 302} | dict.fromkeys(SIGNED_IN, 200),
     ),
     "billing:pay": (
-        lambda s: {"pk": s.invoice.pk},
+        lambda s: {"public_id": s.invoice.public_id},
         "post",
         # 403 for everyone, the payer included, because Stripe is switched off in the
         # test settings — the state a ministry that has not connected it is in, and
@@ -994,7 +994,7 @@ MATRIX = {
         {"anonymous": 302} | dict.fromkeys(SIGNED_IN, 403),
     ),
     "billing:line_add": (
-        lambda s: {"pk": s.draft_invoice.pk},
+        lambda s: {"public_id": s.draft_invoice.public_id},
         "post",
         # The draft, because change_invoice is refused on anything issued. A counselee
         # gets 403 rather than 404: the draft *is* in their queryset, and it is the
@@ -1008,7 +1008,10 @@ MATRIX = {
         },
     ),
     "billing:line_remove": (
-        lambda s: {"pk": s.draft_invoice.pk, "line_pk": s.draft_line.pk},
+        lambda s: {
+            "public_id": s.draft_invoice.public_id,
+            "line_public_id": s.draft_line.public_id,
+        },
         "post",
         {
             "anonymous": 302,
@@ -1019,7 +1022,7 @@ MATRIX = {
         },
     ),
     "billing:invoice_issue": (
-        lambda s: {"pk": s.draft_invoice.pk},
+        lambda s: {"public_id": s.draft_invoice.public_id},
         "post",
         {
             "anonymous": 302,
@@ -1032,7 +1035,7 @@ MATRIX = {
     "billing:invoice_void": (
         # The issued invoice with nothing paid against it: voiding is refused once
         # money has arrived, so the part-paid one would 403 for every actor.
-        lambda s: {"pk": s.invoice.pk},
+        lambda s: {"public_id": s.invoice.public_id},
         "get",
         {
             "anonymous": 302,
@@ -1043,7 +1046,7 @@ MATRIX = {
         },
     ),
     "billing:invoice_write_off": (
-        lambda s: {"pk": s.invoice.pk},
+        lambda s: {"public_id": s.invoice.public_id},
         "get",
         {
             "anonymous": 302,
@@ -1054,7 +1057,7 @@ MATRIX = {
         },
     ),
     "billing:payment_record": (
-        lambda s: {"pk": s.invoice.pk},
+        lambda s: {"public_id": s.invoice.public_id},
         "get",
         # The payer is refused their own invoice here, which is the row worth pausing
         # on: recording money is the office's, and a counselee marking their own bill
@@ -1068,7 +1071,10 @@ MATRIX = {
         },
     ),
     "billing:payment_reverse": (
-        lambda s: {"pk": s.part_paid_invoice.pk, "payment_pk": s.payment.pk},
+        lambda s: {
+            "public_id": s.part_paid_invoice.public_id,
+            "payment_public_id": s.payment.public_id,
+        },
         "post",
         {
             "anonymous": 302,
@@ -1143,7 +1149,7 @@ def test_route_returns_the_expected_status(route, actor, client, make_user, sign
     user = None if actor == "anonymous" else make_user(Role(actor))
     if callable(kwargs):
         # Build the objects before signing in, so the acting user is the one the
-        # case belongs to rather than a bystander with a valid pk.
+        # case belongs to rather than a bystander with a valid public id.
         kwargs = kwargs(scenario(user))
     if user is not None:
         sign_in(user)

@@ -4,14 +4,14 @@
 
 {% block content %}
 <h1>Appointments</h1>
-<p class="role"><a href="{% url 'counseling:case_detail' case.pk %}">{{ case.label }}</a></p>
+<p class="role"><a href="{% url 'counseling:case_detail' case.public_id %}">{{ case.label }}</a></p>
 
 <div class="actions">
   {% if can_schedule %}
-    <a class="button" href="{% url 'scheduling:schedule' case.pk %}">Schedule an appointment</a>
+    <a class="button" href="{% url 'scheduling:schedule' case.public_id %}">Schedule an appointment</a>
   {% endif %}
   {% if can_book %}
-    <a class="button" href="{% url 'scheduling:book' case.pk %}">Book a time</a>
+    <a class="button" href="{% url 'scheduling:book' case.public_id %}">Book a time</a>
   {% endif %}
 </div>
 
@@ -23,7 +23,7 @@
   <tbody>
     {% for booking in upcoming %}
       <tr>
-        <td><a href="{% url 'scheduling:detail' booking.pk %}">{{ booking.starts_at|date:"D j M Y, g:i a" }}</a></td>
+        <td><a href="{% url 'scheduling:detail' booking.public_id %}">{{ booking.starts_at|date:"D j M Y, g:i a" }}</a></td>
         <td>{{ booking|attendee_label:request.user }}</td>
         <td>{{ booking.duration_minutes }} min</td>
         <td class="status status-{{ booking.status }}">{{ booking.get_status_display }}</td>
@@ -45,7 +45,7 @@
   <tbody>
     {% for booking in past %}
       <tr>
-        <td><a href="{% url 'scheduling:detail' booking.pk %}">{{ booking.starts_at|date:"D j M Y, g:i a" }}</a></td>
+        <td><a href="{% url 'scheduling:detail' booking.public_id %}">{{ booking.starts_at|date:"D j M Y, g:i a" }}</a></td>
         <td>{{ booking|attendee_label:request.user }}</td>
         <td>{{ booking.duration_minutes }} min</td>
         <td class="status status-{{ booking.status }}">

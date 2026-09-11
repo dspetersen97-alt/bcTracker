@@ -4,7 +4,7 @@
 {% block content %}
 <h1>{{ thread.subject }}</h1>
 <p class="role">
-  <a href="{% url 'messaging:case_threads' thread.case.pk %}">{{ thread.case.label }}</a> ·
+  <a href="{% url 'messaging:case_threads' thread.case.public_id %}">{{ thread.case.label }}</a> ·
   {% for person in participants %}{% if not forloop.first %} and {% endif %}{{ person.full_name }}{% endfor %}
   {% if not thread.is_open %}<span class="badge">closed</span>{% endif %}
 </p>
@@ -25,7 +25,7 @@
         <ul class="attachments">
           {% for file in message.attachments.all %}
             <li>
-              <a href="{% url 'messaging:attachment' file.pk %}">{{ file.original_filename }}</a>
+              <a href="{% url 'messaging:attachment' file.public_id %}">{{ file.original_filename }}</a>
               <span class="muted">{{ file.byte_size|filesizeformat }}</span>
             </li>
           {% endfor %}
@@ -54,13 +54,13 @@
 
 <div class="actions">
   {% if can_close %}
-    <form method="post" action="{% url 'messaging:close' thread.pk %}" class="inline-form">
+    <form method="post" action="{% url 'messaging:close' thread.public_id %}" class="inline-form">
       {% csrf_token %}
       <button type="submit">Close this conversation</button>
     </form>
   {% endif %}
   {% if can_reopen %}
-    <form method="post" action="{% url 'messaging:reopen' thread.pk %}" class="inline-form">
+    <form method="post" action="{% url 'messaging:reopen' thread.public_id %}" class="inline-form">
       {% csrf_token %}
       <button type="submit">Reopen it</button>
     </form>

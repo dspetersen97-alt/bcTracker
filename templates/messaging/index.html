@@ -20,7 +20,7 @@
     {% for thread in threads %}
       <tr>
         <td>
-          <a href="{% url 'messaging:thread' thread.pk %}">{{ thread.subject }}</a>
+          <a href="{% url 'messaging:thread' thread.public_id %}">{{ thread.subject }}</a>
           {% if not thread.is_open %}<span class="badge">closed</span>{% endif %}
         </td>
         <td>{{ thread.case.label }}</td>

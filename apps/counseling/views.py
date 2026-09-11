@@ -31,6 +31,7 @@ from apps.audit.models import AuditVerb
 from apps.audit.services import record
 from apps.core import mail as core_mail
 from apps.core.http import safe_next, with_query
+from apps.core.ids import looks_like_public_id
 from apps.counseling.forms import (
     CaseCounselorForm,
     CaseCreateForm,
@@ -54,14 +55,18 @@ from apps.scheduling.models import Attendance, Booking
 logger = logging.getLogger(__name__)
 
 
-def visible_case_or_404(request, pk):
+def visible_case_or_404(request, public_id):
     """Fetch a case the actor is allowed to see, or 404.
 
     The single door onto a Case in this module. Going through ``for_actor``
     rather than ``Case.objects`` is what makes "a counselor cannot reach another
     counselor's case" true by construction instead of by review.
+
+    Keyed by ``public_id`` rather than ``pk``, which is what every route in this app
+    now carries: see ``apps/core/ids.py``. The primary key is still what foreign keys
+    and audit metadata use — it just never appears in a URL.
     """
-    return get_object_or_404(Case.objects.for_actor(request.user), pk=pk)
+    return get_object_or_404(Case.objects.for_actor(request.user), public_id=public_id)
 
 
 def require_perm(request, perm, obj=None):
@@ -197,8 +202,8 @@ def case_list(request):
 
 
 @login_required
-def case_detail(request, pk):
-    case = visible_case_or_404(request, pk)
+def case_detail(request, public_id):
+    case = visible_case_or_404(request, public_id)
     require_perm(request, "counseling.view_case", case)
     record(AuditVerb.CASE_VIEWED, actor=request.user, target=case, request=request)
 
@@ -248,7 +253,7 @@ def case_detail(request, pk):
 def case_create(request):
     """Open a case, and put the counselees on it in the same step.
 
-    ``?counselee=<pk>`` pre-selects somebody, which is how the page that creates a
+    ``?counselee=<public id>`` pre-selects somebody, which is how the page that creates a
     counselee hands them back: an administrator who left here to take on a new
     counselee returns to find them already ticked rather than having to find them
     in a list of everybody the ministry has ever seen.
@@ -262,7 +267,7 @@ def case_create(request):
     initial = {}
     preselected = request.GET.getlist("counselee")
     if preselected:
-        initial["counselees"] = eligible_counselees().filter(pk__in=preselected)
+        initial["counselees"] = eligible_counselees().filter(public_id__in=preselected)
 
     form = CaseCreateForm(request.POST or None, initial=initial)
     if request.method == "POST" and form.is_valid():
@@ -293,7 +298,7 @@ def case_create(request):
             )
         else:
             messages.success(request, _("Case opened. Add the counselees next."))
-        return redirect("counseling:case_detail", pk=case.pk)
+        return redirect("counseling:case_detail", public_id=case.public_id)
 
     return render(
         request,
@@ -313,8 +318,8 @@ def case_create(request):
 
 @login_required
 @require_http_methods(["GET", "POST"])
-def case_edit(request, pk):
-    case = visible_case_or_404(request, pk)
+def case_edit(request, public_id):
+    case = visible_case_or_404(request, public_id)
     require_perm(request, "counseling.change_case", case)
 
     # An administrator may reassign; the assigned counselor may not, because
@@ -343,21 +348,21 @@ def case_edit(request, pk):
             fields=sorted(form.changed_data),
         )
         messages.success(request, _("Case updated."))
-        return redirect("counseling:case_detail", pk=case.pk)
+        return redirect("counseling:case_detail", public_id=case.public_id)
 
     return render(request, "counseling/case_form.html", {"form": form, "case": case})
 
 
 @login_required
 @require_POST
-def case_close(request, pk):
-    case = visible_case_or_404(request, pk)
+def case_close(request, public_id):
+    case = visible_case_or_404(request, public_id)
     require_perm(request, "counseling.close_case", case)
 
     case.close()
     record(AuditVerb.CASE_CLOSED, actor=request.user, target=case, request=request)
     messages.success(request, _("Case closed. Its history stays available."))
-    return redirect("counseling:case_detail", pk=case.pk)
+    return redirect("counseling:case_detail", public_id=case.public_id)
 
 
 # --- membership -----------------------------------------------------------
@@ -365,14 +370,14 @@ def case_close(request, pk):
 
 @login_required
 @require_http_methods(["GET", "POST"])
-def case_member_add(request, pk):
+def case_member_add(request, public_id):
     """Put an existing counselee on a case.
 
     This is the action with the real disclosure consequence in this app: after it
     runs, someone can see a case they could not see a moment ago. Administrator
     only, and audited with both parties named.
     """
-    case = visible_case_or_404(request, pk)
+    case = visible_case_or_404(request, public_id)
     require_perm(request, "counseling.manage_case_members", case)
 
     form = CaseMemberForm(request.POST or None, case=case)
@@ -390,23 +395,23 @@ def case_member_add(request, pk):
             request,
             _("%(name)s added to the case.") % {"name": member.counselee.full_name},
         )
-        return redirect("counseling:case_detail", pk=case.pk)
+        return redirect("counseling:case_detail", public_id=case.public_id)
 
     return render(request, "counseling/case_member_form.html", {"form": form, "case": case})
 
 
 @login_required
 @require_POST
-def case_member_end(request, pk, member_pk):
+def case_member_end(request, public_id, member_public_id):
     """End a membership rather than delete it.
 
     The dates are the record of who was in the room, and appointment and billing
     history point at them.
     """
-    case = visible_case_or_404(request, pk)
+    case = visible_case_or_404(request, public_id)
     require_perm(request, "counseling.manage_case_members", case)
 
-    member = get_object_or_404(case.members, pk=member_pk, ended_on__isnull=True)
+    member = get_object_or_404(case.members, public_id=member_public_id, ended_on__isnull=True)
     member.end()
     record(
         AuditVerb.CASE_MEMBER_ENDED,
@@ -416,14 +421,14 @@ def case_member_end(request, pk, member_pk):
         counselee_id=str(member.counselee_id),
     )
     messages.success(request, _("Membership ended."))
-    return redirect("counseling:case_detail", pk=case.pk)
+    return redirect("counseling:case_detail", public_id=case.public_id)
 
 
 # --- people ---------------------------------------------------------------
 
 
 @login_required
-def counselee_detail(request, pk):
+def counselee_detail(request, public_id):
     """One counselee's file, in one place: sessions, documents, and notes.
 
     The counselor's request, and the reason it is worth a page of its own: before a
@@ -454,7 +459,7 @@ def counselee_detail(request, pk):
 
     memberships = list(
         CaseMember.objects.for_actor(request.user)
-        .filter(counselee_id=pk)
+        .filter(counselee__public_id=public_id)
         .select_related("case", "case__counselor", "counselee")
         .order_by("-joined_on")
     )
@@ -538,7 +543,7 @@ def counselee_create(request):
     Both ways back, because this page is only ever reached from somewhere else:
 
       * ``?case=`` returns to adding them to an existing case;
-      * ``?next=`` returns to whatever sent them, with ``counselee=<pk>`` added so
+      * ``?next=`` returns to whatever sent them, with ``counselee=<public id>`` added so
         the New Case page can tick the person who did not exist a moment ago. A
         redirect back to a half-filled form the administrator has to fill in from
         memory is the kind of small friction that ends with the counselee being
@@ -551,19 +556,25 @@ def counselee_create(request):
     """
     require_perm(request, "accounts.manage_users")
 
-    next_case = request.GET.get("case")
+    # Shape-checked before it reaches reverse(): a ``?case=`` that could not name a
+    # case would raise NoReverseMatch and turn a mistyped link into a 500. Dropping it
+    # falls through to the ``?next=`` branch, which is the safe half of the pair.
+    next_case = request.GET.get("case", "")
+    if not looks_like_public_id(next_case):
+        next_case = ""
+
     form = CounseleeCreateForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         user = form.save(created_by=request.user, request=request)
         if next_case:
             after = reverse("counseling:case_member_add", args=[next_case])
         else:
-            # ``counselee=<pk>`` only when somebody asked to be sent back. The case
+            # ``counselee=<public id>`` only when somebody asked to be sent back. The case
             # list has no use for it, and a parameter that does nothing invites the
             # question of what it does.
             returning_to = safe_next(request, "")
             after = (
-                with_query(returning_to, counselee=user.pk)
+                with_query(returning_to, counselee=user.public_id)
                 if returning_to
                 else reverse("counseling:case_list")
             )
@@ -622,7 +633,7 @@ def counselor_profile_edit(request):
 
 @login_required
 @require_http_methods(["GET", "POST"])
-def counselee_profile_edit(request, pk=None):
+def counselee_profile_edit(request, public_id=None):
     """Intake details.
 
     A counselee maintains their own; a counselor or admin may correct one for a
@@ -631,7 +642,7 @@ def counselee_profile_edit(request, pk=None):
     """
     require_perm(request, "counseling.change_counselee_profile")
 
-    if pk is None:
+    if public_id is None:
         if request.user.role != Role.COUNSELEE:
             raise PermissionDenied
         profile, _created = CounseleeProfile.objects.get_or_create(user=request.user)
@@ -640,7 +651,9 @@ def counselee_profile_edit(request, pk=None):
             # A counselee has exactly one profile and reaches it without an id.
             # Accepting one here would be an invitation to try someone else's.
             raise PermissionDenied
-        profile = get_object_or_404(CounseleeProfile.objects.for_actor(request.user), pk=pk)
+        profile = get_object_or_404(
+            CounseleeProfile.objects.for_actor(request.user), public_id=public_id
+        )
 
     form = CounseleeProfileForm(request.POST or None, instance=profile)
     if request.method == "POST" and form.is_valid():

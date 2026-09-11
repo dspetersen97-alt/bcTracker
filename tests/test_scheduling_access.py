@@ -87,7 +87,7 @@ class TestCounseleesOnASharedCase:
         hers = make_booking(case, ada)
         sign_in(ben)
 
-        assert get(client, "detail", pk=hers.pk).status_code == 404
+        assert get(client, "detail", public_id=hers.public_id).status_code == 404
 
     def test_a_joint_appointment_is_visible_to_everyone_expected_at_it(
         self, family, client, sign_in
@@ -96,7 +96,7 @@ class TestCounseleesOnASharedCase:
         joint = make_booking(case, ada, attendance=Attendance.WHOLE_CASE)
         sign_in(ben)
 
-        assert get(client, "detail", pk=joint.pk).status_code == 200
+        assert get(client, "detail", public_id=joint.public_id).status_code == 200
 
     def test_a_joint_appointment_does_not_name_who_arranged_it(self, family, client, sign_in):
         """``Booking.counselee`` on a joint booking is whoever arranged it, and on a
@@ -105,7 +105,7 @@ class TestCounseleesOnASharedCase:
         joint = make_booking(case, ada, attendance=Attendance.WHOLE_CASE)
         sign_in(ben)
 
-        body = get(client, "detail", pk=joint.pk).content.decode()
+        body = get(client, "detail", public_id=joint.public_id).content.decode()
 
         assert "Ada" not in body
         assert "Everyone on the case" in body
@@ -115,7 +115,7 @@ class TestCounseleesOnASharedCase:
         hers = make_booking(case, ada)
         sign_in(ada)
 
-        assert "You" in get(client, "detail", pk=hers.pk).content.decode()
+        assert "You" in get(client, "detail", public_id=hers.public_id).content.decode()
 
     def test_the_diary_holds_only_what_the_viewer_may_see(self, family, client, sign_in):
         case, ada, ben = family
@@ -135,7 +135,9 @@ class TestCounseleesOnASharedCase:
         hers = make_booking(case, ada)
         sign_in(ben)
 
-        upcoming = get(client, "case_appointments", case_pk=case.pk).context["upcoming"]
+        upcoming = get(client, "case_appointments", case_public_id=case.public_id).context[
+            "upcoming"
+        ]
 
         assert hers not in upcoming
 
@@ -144,8 +146,8 @@ class TestCounseleesOnASharedCase:
         hers = make_booking(case, ada)
         sign_in(ben)
 
-        assert get(client, "cancel", pk=hers.pk).status_code == 404
-        assert post(client, "cancel", {"reason": ""}, pk=hers.pk).status_code == 404
+        assert get(client, "cancel", public_id=hers.public_id).status_code == 404
+        assert post(client, "cancel", {"reason": ""}, public_id=hers.public_id).status_code == 404
         hers.refresh_from_db()
         assert hers.status == BookingStatus.CONFIRMED
 
@@ -155,7 +157,7 @@ class TestCounseleesOnASharedCase:
         hers = make_booking(case, ada)
         sign_in(ada)
 
-        response = post(client, "cancel", {"reason": "Away that week."}, pk=hers.pk)
+        response = post(client, "cancel", {"reason": "Away that week."}, public_id=hers.public_id)
 
         assert response.status_code == 302
         hers.refresh_from_db()
@@ -174,7 +176,7 @@ class TestWhatACounseleeMayNotDo:
         hers = make_booking(case, ada, status=BookingStatus.REQUESTED)
         sign_in(ada)
 
-        assert post(client, "confirm", pk=hers.pk).status_code == 403
+        assert post(client, "confirm", public_id=hers.public_id).status_code == 403
         hers.refresh_from_db()
         assert hers.status == BookingStatus.REQUESTED
 
@@ -185,14 +187,14 @@ class TestWhatACounseleeMayNotDo:
         hers = make_booking(case, ada)
         sign_in(ada)
 
-        assert get(client, "reschedule", pk=hers.pk).status_code == 403
+        assert get(client, "reschedule", public_id=hers.public_id).status_code == 403
 
     def test_a_counselee_cannot_record_an_outcome(self, family, client, sign_in):
         case, ada, _ = family
         held = make_booking(case, ada, hours_ahead=-72)
         sign_in(ada)
 
-        assert get(client, "outcome", pk=held.pk).status_code == 403
+        assert get(client, "outcome", public_id=held.public_id).status_code == 403
 
     def test_a_counselee_never_sees_the_session_note(self, family, client, sign_in):
         case, ada, _ = family
@@ -205,7 +207,7 @@ class TestWhatACounseleeMayNotDo:
         )
         sign_in(ada)
 
-        response = get(client, "detail", pk=held.pk)
+        response = get(client, "detail", public_id=held.public_id)
 
         assert response.status_code == 200
         assert response.context["show_notes"] is False
@@ -223,7 +225,7 @@ class TestWhatACounseleeMayNotDo:
         )
         sign_in(ada)
 
-        assert post(client, "availability_delete", pk=rule.pk).status_code == 404
+        assert post(client, "availability_delete", public_id=rule.public_id).status_code == 404
         assert AvailabilityRule.objects.filter(pk=rule.pk).exists()
 
 
@@ -249,14 +251,14 @@ class TestTheSessionNote:
         upcoming = make_booking(case, ada)
         sign_in(case.counselor)
 
-        assert get(client, "outcome", pk=upcoming.pk).status_code == 403
-        assert get(client, "note", pk=upcoming.pk).status_code == 200
+        assert get(client, "outcome", public_id=upcoming.public_id).status_code == 403
+        assert get(client, "note", public_id=upcoming.public_id).status_code == 200
 
         response = post(
             client,
             "note",
             {"counselor_note": "Follow up on the Ephesians homework."},
-            pk=upcoming.pk,
+            public_id=upcoming.public_id,
         )
 
         assert response.status_code == 302
@@ -278,7 +280,9 @@ class TestTheSessionNote:
         )
         sign_in(case.counselor)
 
-        post(client, "note", {"counselor_note": "Corrected on reflection."}, pk=held.pk)
+        post(
+            client, "note", {"counselor_note": "Corrected on reflection."}, public_id=held.public_id
+        )
 
         held.refresh_from_db()
         assert held.counselor_note == "Corrected on reflection."
@@ -296,7 +300,7 @@ class TestTheSessionNote:
             client,
             "note",
             {"counselor_note": "Ada disclosed a history of self-harm."},
-            pk=upcoming.pk,
+            public_id=upcoming.public_id,
         )
 
         event = AuditEvent.objects.filter(verb=AuditVerb.BOOKING_NOTE_UPDATED).get()
@@ -316,14 +320,22 @@ class TestTheSessionNote:
         )
         sign_in(admin_user)
 
-        detail = get(client, "detail", pk=held.pk)
+        detail = get(client, "detail", public_id=held.public_id)
 
         assert detail.context["show_notes"] is True
         assert detail.context["can_edit_note"] is False
         # And no link offering an action that would only 403.
-        assert reverse("scheduling:note", kwargs={"pk": held.pk}) not in detail.content.decode()
-        assert get(client, "note", pk=held.pk).status_code == 403
-        assert post(client, "note", {"counselor_note": "Rewritten."}, pk=held.pk).status_code == 403
+        assert (
+            reverse("scheduling:note", kwargs={"public_id": held.public_id})
+            not in detail.content.decode()
+        )
+        assert get(client, "note", public_id=held.public_id).status_code == 403
+        assert (
+            post(
+                client, "note", {"counselor_note": "Rewritten."}, public_id=held.public_id
+            ).status_code
+            == 403
+        )
         held.refresh_from_db()
         assert held.counselor_note == "Ada disclosed a history of self-harm."
 
@@ -332,19 +344,24 @@ class TestTheSessionNote:
         upcoming = make_booking(case, ada)
         sign_in(case.counselor)
 
-        detail = get(client, "detail", pk=upcoming.pk)
+        detail = get(client, "detail", public_id=upcoming.public_id)
 
         assert detail.context["can_edit_note"] is True
-        assert reverse("scheduling:note", kwargs={"pk": upcoming.pk}) in detail.content.decode()
+        assert (
+            reverse("scheduling:note", kwargs={"public_id": upcoming.public_id})
+            in detail.content.decode()
+        )
 
     def test_a_counselee_cannot_write_a_note_about_themselves(self, family, client, sign_in):
         case, ada, _ = family
         upcoming = make_booking(case, ada)
         sign_in(ada)
 
-        assert get(client, "note", pk=upcoming.pk).status_code == 403
+        assert get(client, "note", public_id=upcoming.public_id).status_code == 403
         assert (
-            post(client, "note", {"counselor_note": "Say I did well."}, pk=upcoming.pk).status_code
+            post(
+                client, "note", {"counselor_note": "Say I did well."}, public_id=upcoming.public_id
+            ).status_code
             == 403
         )
         upcoming.refresh_from_db()
@@ -357,7 +374,7 @@ class TestTheSessionNote:
         upcoming = make_booking(case, ada)
         sign_in(other_counselor)
 
-        assert get(client, "note", pk=upcoming.pk).status_code == 404
+        assert get(client, "note", public_id=upcoming.public_id).status_code == 404
 
 
 # --- financial_admin ------------------------------------------------------
@@ -384,7 +401,7 @@ class TestFinancialAdmin:
         held = make_booking(case, ada, hours_ahead=-72, status=BookingStatus.COMPLETED)
         sign_in(financial_admin)
 
-        response = get(client, "case_appointments", case_pk=case.pk)
+        response = get(client, "case_appointments", case_public_id=case.public_id)
 
         assert response.status_code == 200
         assert held in response.context["past"]
@@ -403,7 +420,7 @@ class TestFinancialAdmin:
         )
         sign_in(financial_admin)
 
-        response = get(client, "detail", pk=held.pk)
+        response = get(client, "detail", public_id=held.public_id)
 
         assert response.status_code == 200
         assert response.context["show_notes"] is False
@@ -427,7 +444,7 @@ class TestFinancialAdmin:
         )
         sign_in(financial_admin)
 
-        body = get(client, "case_appointments", case_pk=case.pk).content.decode()
+        body = get(client, "case_appointments", case_public_id=case.public_id).content.decode()
 
         assert "marriage is over" not in body
         assert "self-harm" not in body
@@ -436,8 +453,8 @@ class TestFinancialAdmin:
         case, _, _ = family
         sign_in(financial_admin)
 
-        assert get(client, "book", case_pk=case.pk).status_code == 403
-        assert get(client, "schedule", case_pk=case.pk).status_code == 403
+        assert get(client, "book", case_public_id=case.public_id).status_code == 403
+        assert get(client, "schedule", case_public_id=case.public_id).status_code == 403
 
     def test_billing_cannot_act_on_an_appointment_it_can_read(
         self, family, client, sign_in, financial_admin
@@ -446,9 +463,9 @@ class TestFinancialAdmin:
         hers = make_booking(case, ada, status=BookingStatus.REQUESTED)
         sign_in(financial_admin)
 
-        assert post(client, "confirm", pk=hers.pk).status_code == 403
-        assert get(client, "cancel", pk=hers.pk).status_code == 403
-        assert get(client, "reschedule", pk=hers.pk).status_code == 403
+        assert post(client, "confirm", public_id=hers.public_id).status_code == 403
+        assert get(client, "cancel", public_id=hers.public_id).status_code == 403
+        assert get(client, "reschedule", public_id=hers.public_id).status_code == 403
         hers.refresh_from_db()
         assert hers.status == BookingStatus.REQUESTED
 
@@ -473,9 +490,12 @@ class TestFinancialAdmin:
         )
         sign_in(financial_admin)
 
-        body = get(client, "case_appointments", case_pk=case.pk).content.decode()
+        body = get(client, "case_appointments", case_public_id=case.public_id).content.decode()
 
-        assert cancelled in get(client, "case_appointments", case_pk=case.pk).context["past"]
+        assert (
+            cancelled
+            in get(client, "case_appointments", case_public_id=case.public_id).context["past"]
+        )
         assert "late notice" in body
 
 
@@ -490,7 +510,7 @@ class TestAcrossCounselors:
         hers = make_booking(case, ada)
         sign_in(other_counselor)
 
-        assert get(client, "detail", pk=hers.pk).status_code == 404
+        assert get(client, "detail", public_id=hers.public_id).status_code == 404
 
     def test_a_counselor_cannot_delete_another_counselors_office_hours(
         self, family, client, sign_in, other_counselor
@@ -504,7 +524,7 @@ class TestAcrossCounselors:
         )
         sign_in(other_counselor)
 
-        assert post(client, "availability_delete", pk=rule.pk).status_code == 404
+        assert post(client, "availability_delete", public_id=rule.public_id).status_code == 404
         assert AvailabilityRule.objects.filter(pk=rule.pk).exists()
 
     def test_the_office_hours_page_shows_only_the_viewers_own(
@@ -549,7 +569,7 @@ class TestTheBookingPage:
             )
         sign_in(ada)
 
-        before = get(client, "book", case_pk=case.pk)
+        before = get(client, "book", case_public_id=case.public_id)
         first_day, day_slots = before.context["days"][0]
         taken = day_slots[0]
         make_booking(
@@ -558,7 +578,7 @@ class TestTheBookingPage:
             hours_ahead=(taken.start - timezone.now()).total_seconds() / 3600,
         )
 
-        after = get(client, "book", case_pk=case.pk)
+        after = get(client, "book", case_public_id=case.public_id)
         still_offered = [slot for _, slots in after.context["days"] for slot in slots]
 
         assert taken not in still_offered
@@ -578,11 +598,11 @@ class TestTheBookingPage:
             )
         sign_in(ada)
 
-        listing = get(client, "book", case_pk=case.pk)
+        listing = get(client, "book", case_public_id=case.public_id)
         assert listing.context["form"] is None, "no form until a time is picked"
         slot = listing.context["days"][0][1][0]
 
-        url = reverse("scheduling:book", kwargs={"case_pk": case.pk})
+        url = reverse("scheduling:book", kwargs={"case_public_id": case.public_id})
         picked = client.get(url, {"slot": slot.start.isoformat()})
         assert picked.context["form"] is not None
         assert picked.context["chosen"] == slot.start
@@ -598,7 +618,9 @@ class TestTheBookingPage:
 
         booking = Booking.objects.get()
         assert confirmed.status_code == 302
-        assert confirmed["Location"] == reverse("scheduling:detail", kwargs={"pk": booking.pk})
+        assert confirmed["Location"] == reverse(
+            "scheduling:detail", kwargs={"public_id": booking.public_id}
+        )
         assert booking.counselee == ada
         assert booking.starts_at == slot.start
         # Requested, not confirmed: the counselor still has to agree.
@@ -620,8 +642,8 @@ class TestTheBookingPage:
             )
         sign_in(ada)
 
-        url = reverse("scheduling:book", kwargs={"case_pk": case.pk})
-        slot = get(client, "book", case_pk=case.pk).context["days"][0][1][0]
+        url = reverse("scheduling:book", kwargs={"case_public_id": case.public_id})
+        slot = get(client, "book", case_public_id=case.public_id).context["days"][0][1][0]
         make_booking(case, ben, hours_ahead=(slot.start - timezone.now()).total_seconds() / 3600)
 
         response = client.post(
@@ -645,7 +667,7 @@ class TestTheBookingPage:
 
         # 404 rather than 403: the case itself is not in their scope, so its
         # existence is what would be disclosed.
-        assert get(client, "book", case_pk=case.pk).status_code == 404
+        assert get(client, "book", case_public_id=case.public_id).status_code == 404
 
     def test_a_counselor_sees_the_page_but_cannot_post_to_it(self, family, client, sign_in):
         """They are looking at what their counselee would see. A counselor cannot be
@@ -657,13 +679,13 @@ class TestTheBookingPage:
             )
         sign_in(case.counselor)
 
-        page = get(client, "book", case_pk=case.pk)
+        page = get(client, "book", case_public_id=case.public_id)
         assert page.status_code == 200
         assert page.context["may_book"] is False
 
         slot = page.context["days"][0][1][0]
         refused = client.post(
-            reverse("scheduling:book", kwargs={"case_pk": case.pk}),
+            reverse("scheduling:book", kwargs={"case_public_id": case.public_id}),
             {"slot": slot.start.isoformat(), "request_note": ""},
         )
         assert refused.status_code == 403
@@ -684,7 +706,7 @@ def test_a_refused_action_is_recorded(family, client, sign_in):
     hers = make_booking(case, ada, status=BookingStatus.REQUESTED)
     sign_in(ada)
 
-    post(client, "confirm", pk=hers.pk)
+    post(client, "confirm", public_id=hers.public_id)
 
     event = AuditEvent.objects.get(verb=AuditVerb.ACCESS_DENIED)
     assert event.actor == ada

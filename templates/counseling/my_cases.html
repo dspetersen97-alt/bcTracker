@@ -16,19 +16,19 @@
       {% comment %} Deliberately no list of the other people on the case, and no notes. What
          one counselee may see of another is nothing — see apps/counseling/models.py. {% endcomment %}
       <div class="actions">
-        <a class="button" href="{% url 'documents:case_documents' case.pk %}">Documents</a>
-        <a class="button" href="{% url 'documents:upload' case.pk %}">Send a document</a>
-        <a class="button" href="{% url 'messaging:case_threads' case.pk %}">Messages</a>
+        <a class="button" href="{% url 'documents:case_documents' case.public_id %}">Documents</a>
+        <a class="button" href="{% url 'documents:upload' case.public_id %}">Send a document</a>
+        <a class="button" href="{% url 'messaging:case_threads' case.public_id %}">Messages</a>
         {% comment %} Offered only while the case is open, matching messaging.add_thread. A
            button that leads to a refusal is worse than no button. {% endcomment %}
         {% if case.status != 'closed' %}
-          <a class="button" href="{% url 'messaging:start' case.pk %}">Write to my counselor</a>
+          <a class="button" href="{% url 'messaging:start' case.public_id %}">Write to my counselor</a>
         {% endif %}
         {% comment %} Booking is offered on an active case only. On hold means the counseling
            has paused, and a counselee filling the counselor's diary during it is
            not what the pause was for — they can write instead. {% endcomment %}
         {% if case.status == 'active' %}
-          <a class="button" href="{% url 'scheduling:book' case.pk %}">Book an appointment</a>
+          <a class="button" href="{% url 'scheduling:book' case.public_id %}">Book an appointment</a>
         {% endif %}
       </div>
     </div>

@@ -53,7 +53,6 @@ from apps.billing.models import (
     SessionRecord,
     paid_total_cents,
 )
-from apps.billing.numbering import next_invoice_number
 from apps.core.dates import org_today
 
 logger = logging.getLogger(__name__)
@@ -346,8 +345,9 @@ def create_invoice(*, case, counselee, sessions=(), memo="", actor, request=None
                 _("%(what)s is already on an invoice.") % {"what": session.line_description()}
             )
 
+    # No number here: Invoice.save derives it from the row's own public id, so the
+    # reference on the bill and the id in its URL are the same ten digits.
     invoice = Invoice.objects.create(
-        number=next_invoice_number(),
         case=case,
         counselee=counselee,
         memo=memo[:200],

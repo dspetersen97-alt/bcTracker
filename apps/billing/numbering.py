@@ -1,53 +1,56 @@
 """
 Invoice numbers.
 
-An invoice number is a reference a counselee quotes on a check and an office
-looks up when the bank statement arrives, so it has to be short, readable, and
-unique — in that order.
+An invoice number is a reference a counselee quotes on a check and an office looks
+up when the bank statement arrives, so it has to be short, readable, and unique — in
+that order.
 
-**From a Postgres sequence, not from ``MAX(number) + 1``.** The obvious
-implementation reads the highest number and adds one, which is a read-then-write
-race: two staff members raising an invoice in the same second both read 41 and both
-try to write 42, and one of them gets an ``IntegrityError`` from the unique
-constraint after having filled in a form. A sequence hands out 42 and 43 without
-either transaction waiting for the other. The same reasoning as the exclusion
-constraint in scheduling — the database is the only place a counter can be correct
-under concurrency.
+**It is the invoice's public id with a prefix.** ``BC-4820193756``, where the digits
+are the same ten the invoice's URL uses. One identifier rather than two, because two
+would mean a counselee reading ``BC-4820193756`` on a bill and ``/invoices/7391028465/``
+in their browser, with nothing to tell them those are the same document — and an
+office trying to find an invoice from a payment reference would have to know which of
+the two numbers the payer copied.
 
-**A gap in the run is not a missing invoice.** ``nextval`` is deliberately not
-transactional: a number consumed by a transaction that then rolls back is gone.
-That is the price of the paragraph above, and it is the right way round — a gap is
-explainable, whereas two invoices numbered BC-000042 are not. If a ministry's
-accountant needs an unbroken sequence, the answer is a separate register they
-maintain, not a counter this application can be raced on.
+**No longer from a Postgres sequence.** It used to be ``nextval`` on
+``billing_invoice_number_seq``, which solved a real problem — ``MAX(number) + 1`` is a
+read-then-write race, and two staff raising an invoice in the same second would both
+try to write ``BC-000042``. A random ten-digit id has the same property for a
+different reason: it is not derived from any other row, so there is nothing to race
+on. The sequence is left in place by migration 0002 rather than dropped, because
+invoices already issued keep the number they were issued with and a ministry looking
+at ``BC-000041`` in its records should be able to see where the run stopped.
 
-The prefix comes from ``settings.BILLING_INVOICE_PREFIX`` so a ministry can make
-the reference look like theirs. Changing it later is safe: the sequence keeps
-counting, and old invoices keep the number they were issued with, because
-``Invoice.number`` is stored rather than computed.
+**A sequential invoice number was also a disclosure.** ``BC-000006`` on the sixth
+invoice a ministry ever raised tells the recipient how new the ministry is and how
+few people it bills. That is the same argument ``apps/core/ids.py`` makes about URLs,
+and it applies with more force here, because an invoice is the one document in this
+application that routinely leaves the building — forwarded to a spouse, handed to a
+bookkeeper, attached to an expense claim.
+
+The prefix comes from ``settings.BILLING_INVOICE_PREFIX`` so a ministry can make the
+reference look like theirs. Changing it later is safe: old invoices keep the number
+they were issued with, because ``Invoice.number`` is stored rather than computed.
 """
 
 from django.conf import settings
-from django.db import connection
 
-#: Created by migration 0002. Named here rather than in the migration alone so the
-#: two cannot drift apart silently.
+#: Created by migration 0002 and no longer read by this module. Named here so the
+#: sequence that holds the old run has one place that says what it was for.
 SEQUENCE_NAME = "billing_invoice_number_seq"
 
-#: Zero-padded width. Six digits is 999,999 invoices — comfortably more than a
-#: counseling ministry will raise, and short enough to read aloud over the phone.
-WIDTH = 6
+
+def invoice_prefix() -> str:
+    """The ministry's own prefix, or ``BC``."""
+    return (settings.BILLING_INVOICE_PREFIX or "BC").strip()
 
 
-def next_invoice_number() -> str:
-    """The next reference, e.g. ``BC-000042``.
+def invoice_number_for(public_id: str) -> str:
+    """The printed reference for an invoice with this public id, e.g. ``BC-4820193756``.
 
-    Called inside ``services.create_invoice``'s transaction. It does not take a
-    lock and does not wait: see the module docstring.
+    Takes the id rather than the invoice so that ``Invoice.save`` can call it before
+    the row exists, which is the only moment a number may be assigned: the field is
+    unique and an invoice that changed its reference after being sent out would be
+    unmatchable against the payment that quotes the old one.
     """
-    with connection.cursor() as cursor:
-        cursor.execute(f"SELECT nextval('{SEQUENCE_NAME}')")  # noqa: S608 — a constant
-        (value,) = cursor.fetchone()
-
-    prefix = (settings.BILLING_INVOICE_PREFIX or "BC").strip()
-    return f"{prefix}-{int(value):0{WIDTH}d}"
+    return f"{invoice_prefix()}-{public_id}"

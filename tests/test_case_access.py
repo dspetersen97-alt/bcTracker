@@ -137,7 +137,7 @@ class TestCrossCounselorIsolation:
         case, _member = foreign_case
         sign_in(counselor)
 
-        response = client.get(reverse("counseling:case_detail", args=[case.pk]))
+        response = client.get(reverse("counseling:case_detail", args=[case.public_id]))
 
         assert response.status_code == 404, (
             "403 would confirm the case exists; the counselor must not learn that"
@@ -148,13 +148,15 @@ class TestCrossCounselorIsolation:
         case, _member = foreign_case
         sign_in(counselor)
 
-        assert client.get(reverse(route, args=[case.pk])).status_code == 404
+        assert client.get(reverse(route, args=[case.public_id])).status_code == 404
 
     def test_close_is_404(self, client, counselor, sign_in, foreign_case):
         case, _member = foreign_case
         sign_in(counselor)
 
-        assert client.post(reverse("counseling:case_close", args=[case.pk])).status_code == 404
+        assert (
+            client.post(reverse("counseling:case_close", args=[case.public_id])).status_code == 404
+        )
         case.refresh_from_db()
         assert case.status == CaseStatus.ACTIVE
 
@@ -162,7 +164,7 @@ class TestCrossCounselorIsolation:
         case, member = foreign_case
         sign_in(counselor)
 
-        args = [case.pk, member.pk]
+        args = [case.public_id, member.public_id]
         assert client.post(reverse("counseling:case_member_end", args=args)).status_code == 404
         member.refresh_from_db()
         assert member.ended_on is None
@@ -193,7 +195,7 @@ class TestSharedCaseIsolation:
         case, ada, ben = couple_case
         sign_in(ada)
 
-        response = client.get(reverse("counseling:case_detail", args=[case.pk]))
+        response = client.get(reverse("counseling:case_detail", args=[case.public_id]))
 
         assert response.status_code == 200
         assert list(response.context["members"]) == [
@@ -206,7 +208,7 @@ class TestSharedCaseIsolation:
         case, _ada, _ben = couple_case
         sign_in(case.counselor)
 
-        response = client.get(reverse("counseling:case_detail", args=[case.pk]))
+        response = client.get(reverse("counseling:case_detail", args=[case.public_id]))
 
         assert response.context["members"].count() == 2
         assert b"Ada" in response.content
@@ -218,7 +220,7 @@ class TestSharedCaseIsolation:
         sign_in(ada)
 
         response = client.get(
-            reverse("counseling:counselee_profile_edit_for", args=[bens_profile.pk])
+            reverse("counseling:counselee_profile_edit_for", args=[bens_profile.public_id])
         )
 
         assert response.status_code == 403
@@ -249,7 +251,7 @@ class TestWhatFinancialAdminSeesOnACase:
     def test_the_notes_are_not_on_the_page(self, client, sign_in, financial_admin, noted_case):
         sign_in(financial_admin)
 
-        response = client.get(reverse("counseling:case_detail", args=[noted_case.pk]))
+        response = client.get(reverse("counseling:case_detail", args=[noted_case.public_id]))
 
         assert response.status_code == 200
         assert response.context["show_notes"] is False
@@ -258,7 +260,7 @@ class TestWhatFinancialAdminSeesOnACase:
     def test_the_counselor_does_see_the_notes(self, client, sign_in, noted_case):
         sign_in(noted_case.counselor)
 
-        response = client.get(reverse("counseling:case_detail", args=[noted_case.pk]))
+        response = client.get(reverse("counseling:case_detail", args=[noted_case.public_id]))
 
         assert response.context["show_notes"] is True
         assert b"infidelity" in response.content
@@ -306,7 +308,7 @@ class TestMembershipLifecycle:
         sign_in(admin_user)
 
         response = client.post(
-            reverse("counseling:case_member_add", args=[case.pk]),
+            reverse("counseling:case_member_add", args=[case.public_id]),
             {"counselee": newcomer.pk, "joined_on": "2026-09-01"},
         )
 
@@ -339,7 +341,7 @@ class TestMembershipLifecycle:
         sign_in(admin_user)
 
         response = client.post(
-            reverse("counseling:case_member_end", args=[case.pk, member.pk]),
+            reverse("counseling:case_member_end", args=[case.public_id, member.public_id]),
         )
 
         assert response.status_code == 302
@@ -354,7 +356,9 @@ class TestMembershipLifecycle:
         member.end()
         sign_in(admin_user)
 
-        response = client.post(reverse("counseling:case_member_end", args=[case.pk, member.pk]))
+        response = client.post(
+            reverse("counseling:case_member_end", args=[case.public_id, member.public_id])
+        )
 
         assert response.status_code == 404
 
@@ -370,7 +374,7 @@ class TestCaseLifecycle:
         case = Case.objects.create(counselor=counselor, label="Concluded")
         sign_in(counselor)
 
-        client.post(reverse("counseling:case_close", args=[case.pk]))
+        client.post(reverse("counseling:case_close", args=[case.public_id]))
 
         case.refresh_from_db()
         assert case.status == CaseStatus.CLOSED
@@ -382,14 +386,18 @@ class TestCaseLifecycle:
         case.close()
         sign_in(counselor)
 
-        assert client.post(reverse("counseling:case_close", args=[case.pk])).status_code == 403
+        assert (
+            client.post(reverse("counseling:case_close", args=[case.public_id])).status_code == 403
+        )
 
     def test_a_closed_case_stays_readable(self, client, sign_in, couple_case):
         case, ada, _ben = couple_case
         case.close()
         sign_in(ada)
 
-        assert client.get(reverse("counseling:case_detail", args=[case.pk])).status_code == 200
+        assert (
+            client.get(reverse("counseling:case_detail", args=[case.public_id])).status_code == 200
+        )
 
     def test_a_counselor_cannot_reassign_their_own_case(
         self, client, sign_in, counselor, other_counselor
@@ -403,7 +411,7 @@ class TestCaseLifecycle:
         sign_in(counselor)
 
         client.post(
-            reverse("counseling:case_edit", args=[case.pk]),
+            reverse("counseling:case_edit", args=[case.public_id]),
             {"label": "Mine", "kind": "individual", "notes": "", "counselor": other_counselor.pk},
         )
 
@@ -417,7 +425,7 @@ class TestCaseLifecycle:
         sign_in(admin_user)
 
         client.post(
-            reverse("counseling:case_edit", args=[case.pk]),
+            reverse("counseling:case_edit", args=[case.public_id]),
             {"label": "Mine", "kind": "individual", "notes": "", "counselor": other_counselor.pk},
         )
 
@@ -434,7 +442,7 @@ class TestCaseLifecycle:
         sign_in(admin_user)
 
         client.post(
-            reverse("counseling:case_edit", args=[case.pk]),
+            reverse("counseling:case_edit", args=[case.public_id]),
             {"label": "Mine", "kind": "individual", "notes": "", "counselor": other_counselor.pk},
         )
 
@@ -607,7 +615,7 @@ class TestProfileAccess:
         sign_in(case.counselor)
 
         response = client.post(
-            reverse("counseling:counselee_profile_edit_for", args=[profile.pk]),
+            reverse("counseling:counselee_profile_edit_for", args=[profile.public_id]),
             {
                 "date_of_birth": "1985-04-02",
                 "address": "12 Elm Street",
@@ -634,7 +642,9 @@ class TestProfileAccess:
         profile = CounseleeProfile.objects.create(user=foreign)
         sign_in(counselor)
 
-        response = client.get(reverse("counseling:counselee_profile_edit_for", args=[profile.pk]))
+        response = client.get(
+            reverse("counseling:counselee_profile_edit_for", args=[profile.public_id])
+        )
 
         assert response.status_code == 404
 
@@ -644,7 +654,9 @@ class TestProfileAccess:
         CaseMember.objects.get(case=case, counselee=ada).end()
         sign_in(case.counselor)
 
-        response = client.get(reverse("counseling:counselee_profile_edit_for", args=[profile.pk]))
+        response = client.get(
+            reverse("counseling:counselee_profile_edit_for", args=[profile.public_id])
+        )
 
         assert response.status_code == 404
 
@@ -718,7 +730,7 @@ class TestTheAuditTrailOnCaseAccess:
         case, ada, _ben = couple_case
         sign_in(ada)
 
-        client.get(reverse("counseling:case_detail", args=[case.pk]))
+        client.get(reverse("counseling:case_detail", args=[case.public_id]))
 
         event = AuditEvent.objects.get(verb=AuditVerb.CASE_VIEWED)
         assert event.actor == ada
@@ -732,7 +744,7 @@ class TestTheAuditTrailOnCaseAccess:
         case, ada, _ben = couple_case
         sign_in(ada)
 
-        client.get(reverse("counseling:case_edit", args=[case.pk]))
+        client.get(reverse("counseling:case_edit", args=[case.public_id]))
 
         event = AuditEvent.objects.get(verb=AuditVerb.ACCESS_DENIED)
         assert event.actor == ada
@@ -750,6 +762,6 @@ class TestTheAuditTrailOnCaseAccess:
         case = Case.objects.create(counselor=other_counselor, label="Not yours")
         sign_in(counselor)
 
-        client.get(reverse("counseling:case_detail", args=[case.pk]))
+        client.get(reverse("counseling:case_detail", args=[case.public_id]))
 
         assert not AuditEvent.objects.filter(target_id=str(case.pk)).exists()

@@ -51,8 +51,9 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.accounts.models import Role
 from apps.billing import money
+from apps.billing.numbering import invoice_number_for
 from apps.core.dates import org_today
-from apps.core.models import TimeStampedModel
+from apps.core.models import PublicIdModel, TimeStampedModel
 from apps.core.scoping import ActorScopedQuerySet, CaseScopedQuerySet
 
 
@@ -136,7 +137,7 @@ class FeeManager(models.Manager.from_queryset(FeeQuerySet)):
         return candidates.filter(counselor__isnull=True).order_by("-effective_from", "-id").first()
 
 
-class Fee(TimeStampedModel):
+class Fee(PublicIdModel, TimeStampedModel):
     """One rate, for one kind of charge, in force over a range of dates."""
 
     kind = models.CharField(max_length=30, choices=FeeKind.choices)
@@ -248,7 +249,7 @@ class SessionRecordManager(models.Manager.from_queryset(SessionRecordQuerySet)):
         return self.get_queryset().for_actor(user)
 
 
-class SessionRecord(TimeStampedModel):
+class SessionRecord(PublicIdModel, TimeStampedModel):
     """One billable event, with the fee that applied to it frozen in.
 
     Deliberately **no notes field of any kind**. ``financial_admin`` reads every
@@ -437,12 +438,12 @@ class InvoiceManager(models.Manager.from_queryset(InvoiceQuerySet)):
         return self.get_queryset().for_actor(user)
 
 
-class Invoice(TimeStampedModel):
+class Invoice(PublicIdModel, TimeStampedModel):
     """One bill, addressed to one counselee, for sessions on one case."""
 
-    # The reference a counselee quotes on a check. Assigned from a Postgres
-    # sequence when the row is created — see apps/billing/numbering.py, including
-    # why a gap in the run is not a missing invoice.
+    # The reference a counselee quotes on a check: the prefix plus this invoice's
+    # public id, filled in by save() below. See apps/billing/numbering.py for why it
+    # is the same ten digits as the URL rather than a second number of its own.
     number = models.CharField(max_length=32, unique=True, editable=False)
 
     case = models.ForeignKey("counseling.Case", on_delete=models.PROTECT, related_name="invoices")
@@ -552,6 +553,24 @@ class Invoice(TimeStampedModel):
     def __str__(self) -> str:
         return self.number
 
+    def save(self, *args, **kwargs):
+        """Assign the printed reference on the way in, once.
+
+        ``ensure_public_id`` rather than reading ``self.public_id``, because the id is
+        normally assigned by ``PublicIdModel.save`` — which has not run yet at this
+        point, and cannot, since the number has to be in the row being inserted.
+
+        Guarded on ``not self.number`` rather than on ``self._state.adding``: an invoice
+        loaded and re-saved must keep the reference it was issued under, and a caller
+        that passed a number explicitly (a data import, a test fixture) meant it.
+        """
+        if not self.number:
+            self.number = invoice_number_for(self.ensure_public_id())
+            update_fields = kwargs.get("update_fields")
+            if update_fields is not None:
+                kwargs["update_fields"] = [*update_fields, "number"]
+        return super().save(*args, **kwargs)
+
     @property
     def balance_cents(self) -> int:
         """What is still owed. Negative means an overpayment.
@@ -598,7 +617,7 @@ class InvoiceLineItemQuerySet(ActorScopedQuerySet):
         return self.filter(invoice__in=Invoice.objects.for_actor(user))
 
 
-class InvoiceLineItem(TimeStampedModel):
+class InvoiceLineItem(PublicIdModel, TimeStampedModel):
     """One charge on one invoice.
 
     ``amount_cents`` is stored as well as derivable, and a CheckConstraint asserts
@@ -678,7 +697,7 @@ class PaymentQuerySet(ActorScopedQuerySet):
         return self.filter(invoice__in=Invoice.objects.for_actor(user))
 
 
-class Payment(TimeStampedModel):
+class Payment(PublicIdModel, TimeStampedModel):
     """Money received against an invoice.
 
     Not soft-deleted, and never edited. A payment recorded in error is corrected by

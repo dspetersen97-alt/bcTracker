@@ -22,11 +22,17 @@ urlpatterns = [
     # A counselor's own office hours.
     path("availability/", views.availability, name="availability"),
     path("availability/add/", views.availability_add, name="availability_add"),
-    path("availability/<int:pk>/edit/", views.availability_edit, name="availability_edit"),
-    path("availability/<int:pk>/delete/", views.availability_delete, name="availability_delete"),
+    path(
+        "availability/<publicid:public_id>/edit/", views.availability_edit, name="availability_edit"
+    ),
+    path(
+        "availability/<publicid:public_id>/delete/",
+        views.availability_delete,
+        name="availability_delete",
+    ),
     path("availability/exceptions/add/", views.override_add, name="override_add"),
     path(
-        "availability/exceptions/<int:pk>/delete/",
+        "availability/exceptions/<publicid:public_id>/delete/",
         views.override_delete,
         name="override_delete",
     ),
@@ -39,14 +45,18 @@ urlpatterns = [
     path("availability/google/resync/", google_views.resync, name="google_resync"),
     # The diary.
     path("appointments/", views.appointments, name="appointments"),
-    path("appointments/<int:pk>/", views.detail, name="detail"),
-    path("appointments/<int:pk>/confirm/", views.confirm, name="confirm"),
-    path("appointments/<int:pk>/cancel/", views.cancel, name="cancel"),
-    path("appointments/<int:pk>/reschedule/", views.reschedule, name="reschedule"),
-    path("appointments/<int:pk>/outcome/", views.outcome, name="outcome"),
-    path("appointments/<int:pk>/note/", views.note, name="note"),
+    path("appointments/<publicid:public_id>/", views.detail, name="detail"),
+    path("appointments/<publicid:public_id>/confirm/", views.confirm, name="confirm"),
+    path("appointments/<publicid:public_id>/cancel/", views.cancel, name="cancel"),
+    path("appointments/<publicid:public_id>/reschedule/", views.reschedule, name="reschedule"),
+    path("appointments/<publicid:public_id>/outcome/", views.outcome, name="outcome"),
+    path("appointments/<publicid:public_id>/note/", views.note, name="note"),
     # Keyed by a case, because the case is the subject.
-    path("cases/<int:case_pk>/appointments/", views.case_appointments, name="case_appointments"),
-    path("cases/<int:case_pk>/book/", views.book, name="book"),
-    path("cases/<int:case_pk>/schedule/", views.schedule, name="schedule"),
+    path(
+        "cases/<publicid:case_public_id>/appointments/",
+        views.case_appointments,
+        name="case_appointments",
+    ),
+    path("cases/<publicid:case_public_id>/book/", views.book, name="book"),
+    path("cases/<publicid:case_public_id>/schedule/", views.schedule, name="schedule"),
 ]

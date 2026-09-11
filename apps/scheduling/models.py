@@ -40,7 +40,7 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.accounts.models import Role
 from apps.core.dates import org_today
-from apps.core.models import TimeStampedModel
+from apps.core.models import PublicIdModel, TimeStampedModel
 from apps.core.scoping import ActorScopedQuerySet, CaseScopedQuerySet
 
 
@@ -117,7 +117,7 @@ class CounselorOwnedQuerySet(ActorScopedQuerySet):
         ).distinct()
 
 
-class AvailabilityRule(TimeStampedModel):
+class AvailabilityRule(PublicIdModel, TimeStampedModel):
     """A recurring weekly window of office hours, in the counselor's local time."""
 
     counselor = models.ForeignKey(
@@ -193,7 +193,7 @@ class AvailabilityRule(TimeStampedModel):
         return self.effective_to is None or day <= self.effective_to
 
 
-class AvailabilityOverride(TimeStampedModel):
+class AvailabilityOverride(PublicIdModel, TimeStampedModel):
     """One date that departs from the weekly pattern.
 
     Three shapes, and they compose:
@@ -319,7 +319,7 @@ class BookingManager(models.Manager.from_queryset(BookingQuerySet)):
         return self.get_queryset().for_actor(user)
 
 
-class Booking(TimeStampedModel):
+class Booking(PublicIdModel, TimeStampedModel):
     """One appointment.
 
     Not soft-deleted: an appointment is cancelled rather than removed, because a

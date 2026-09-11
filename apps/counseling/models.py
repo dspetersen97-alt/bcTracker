@@ -25,7 +25,7 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.accounts.models import Role
 from apps.core.dates import org_today
-from apps.core.models import SoftDeleteModel, SoftDeleteQuerySet, TimeStampedModel
+from apps.core.models import PublicIdModel, SoftDeleteModel, SoftDeleteQuerySet, TimeStampedModel
 from apps.core.scoping import ActorScopedQuerySet, CaseScopedQuerySet
 
 
@@ -64,7 +64,7 @@ class CaseManager(models.Manager.from_queryset(CaseQuerySet)):
         return self.get_queryset().for_actor(user)
 
 
-class Case(SoftDeleteModel, TimeStampedModel):
+class Case(PublicIdModel, SoftDeleteModel, TimeStampedModel):
     counselor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
@@ -149,7 +149,7 @@ class CaseMemberQuerySet(CaseScopedQuerySet):
         return self.filter(counselee=user)
 
 
-class CaseMember(TimeStampedModel):
+class CaseMember(PublicIdModel, TimeStampedModel):
     """One counselee's participation in one case.
 
     Not soft-deleted: a membership that ends is closed with ``ended_on`` rather
@@ -296,7 +296,7 @@ class CounseleeProfileQuerySet(ActorScopedQuerySet):
         return self.none()
 
 
-class CounseleeProfile(TimeStampedModel):
+class CounseleeProfile(PublicIdModel, TimeStampedModel):
     """Intake details for a counselee.
 
     Deliberately thin. Everything here is what the ministry needs to run an

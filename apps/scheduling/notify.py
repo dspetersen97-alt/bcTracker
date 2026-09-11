@@ -27,6 +27,7 @@ import logging
 from django.conf import settings
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
+from django.urls import reverse
 
 from apps.core.mail import from_address
 
@@ -80,7 +81,12 @@ def _context(booking, recipient, **extra):
         "when": _when(booking.starts_at, recipient.zoneinfo),
         "minutes": booking.duration_minutes,
         "is_joint": booking.is_joint,
-        "url": f"{settings.SITE_BASE_URL}/appointments/{booking.pk}/",
+        # reverse() rather than a literal path, so the route's shape stays the
+        # URLconf's business. An appointment is addressed by its public id — see
+        # apps/core/ids.py — and this link is the one a counselee is most likely to
+        # keep in a mailbox for weeks.
+        "url": settings.SITE_BASE_URL
+        + reverse("scheduling:detail", kwargs={"public_id": booking.public_id}),
         "site_url": settings.SITE_BASE_URL,
         **extra,
     }

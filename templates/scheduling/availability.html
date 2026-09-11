@@ -45,8 +45,8 @@
           {% if rule.effective_to %}– {{ rule.effective_to|date:"j M Y" }}{% else %}onwards{% endif %}
         </td>
         <td class="row-actions">
-          <a href="{% url 'scheduling:availability_edit' rule.pk %}">Edit</a>
-          <form method="post" action="{% url 'scheduling:availability_delete' rule.pk %}" class="inline-form">
+          <a href="{% url 'scheduling:availability_edit' rule.public_id %}">Edit</a>
+          <form method="post" action="{% url 'scheduling:availability_delete' rule.public_id %}" class="inline-form">
             {% csrf_token %}
             <button type="submit" class="link-button danger">Remove</button>
           </form>
@@ -81,7 +81,7 @@
            page, because "hospital" or a name would both be disclosures. {% endcomment %}
         <td>{{ override.reason|default:"—" }}</td>
         <td class="row-actions">
-          <form method="post" action="{% url 'scheduling:override_delete' override.pk %}" class="inline-form">
+          <form method="post" action="{% url 'scheduling:override_delete' override.public_id %}" class="inline-form">
             {% csrf_token %}
             <button type="submit" class="link-button danger">Remove</button>
           </form>

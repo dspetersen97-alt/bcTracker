@@ -24,7 +24,7 @@
   <tbody>
     {% for case in cases %}
       <tr>
-        <td><a href="{% url 'counseling:case_detail' case.pk %}">{{ case.label }}</a></td>
+        <td><a href="{% url 'counseling:case_detail' case.public_id %}">{{ case.label }}</a></td>
         <td>{{ case.counselor.full_name }}</td>
         <td>{{ case.member_count }}</td>
         <td>{{ case.get_status_display }}</td>

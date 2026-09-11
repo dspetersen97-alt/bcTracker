@@ -28,7 +28,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.models import SoftDeleteModel, SoftDeleteQuerySet, TimeStampedModel
+from apps.core.models import PublicIdModel, SoftDeleteModel, SoftDeleteQuerySet, TimeStampedModel
 from apps.core.scoping import CaseScopedQuerySet
 
 
@@ -90,7 +90,7 @@ class DocumentManager(models.Manager.from_queryset(DocumentQuerySet)):
         return self.get_queryset().for_actor(user)
 
 
-class Document(SoftDeleteModel, TimeStampedModel):
+class Document(PublicIdModel, SoftDeleteModel, TimeStampedModel):
     case = models.ForeignKey(
         "counseling.Case",
         on_delete=models.PROTECT,

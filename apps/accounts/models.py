@@ -22,7 +22,7 @@ from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.models import TimeStampedModel
+from apps.core.models import PublicIdModel, TimeStampedModel
 from apps.core.scoping import ActorScopedQuerySet
 
 logger = logging.getLogger(__name__)
@@ -118,7 +118,7 @@ class UserManager(BaseUserManager.from_queryset(UserQuerySet)):
         return self._create_user(email, password, **extra)
 
 
-class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
+class User(AbstractBaseUser, PermissionsMixin, PublicIdModel, TimeStampedModel):
     email = models.EmailField(_("email address"), unique=True)
     first_name = models.CharField(max_length=80, blank=True)
     last_name = models.CharField(max_length=80, blank=True)

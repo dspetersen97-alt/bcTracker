@@ -9,7 +9,7 @@
 <div class="card">
   <h1>{{ heading }}</h1>
   <p class="role">Invoice
-    <a href="{% url 'billing:invoice_detail' invoice.pk %}">{{ invoice.number }}</a> ·
+    <a href="{% url 'billing:invoice_detail' invoice.public_id %}">{{ invoice.number }}</a> ·
     {{ invoice.counselee.full_name }} · {{ invoice.display_total }}</p>
 
   <p class="notice">{{ explanation }}</p>
@@ -18,7 +18,7 @@
     {% csrf_token %}
     {% include "includes/form.html" %}
     <button type="submit">{{ submit_label }}</button>
-    <a href="{% url 'billing:invoice_detail' invoice.pk %}">Leave it alone</a>
+    <a href="{% url 'billing:invoice_detail' invoice.public_id %}">Leave it alone</a>
   </form>
 
   <p class="muted">The reason is kept on the invoice and in the audit trail. Write it

@@ -15,12 +15,12 @@
       <tr>
         <td class="thumb-cell">
           {% if document.has_thumbnail %}
-            <img class="thumb" src="{% url 'documents:thumbnail' document.pk %}"
+            <img class="thumb" src="{% url 'documents:thumbnail' document.public_id %}"
                  alt="Preview of {{ document.display_name }}" width="60">
           {% endif %}
         </td>
-        <td><a href="{% url 'documents:detail' document.pk %}">{{ document.display_name }}</a></td>
-        <td><a href="{% url 'documents:case_documents' document.case_id %}">{{ document.case.label }}</a></td>
+        <td><a href="{% url 'documents:detail' document.public_id %}">{{ document.display_name }}</a></td>
+        <td><a href="{% url 'documents:case_documents' document.case.public_id %}">{{ document.case.label }}</a></td>
         <td>{{ document|source_label:request.user }}</td>
         <td>{{ document.created_at|date:"j M Y" }}</td>
       </tr>

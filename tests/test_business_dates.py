@@ -104,7 +104,7 @@ class TestClosingACase:
 
         from django.urls import reverse
 
-        response = client.post(reverse("counseling:case_close", args=[case.pk]))
+        response = client.post(reverse("counseling:case_close", args=[case.public_id]))
 
         assert response.status_code == 302, "not a 500 from a violated constraint"
         case.refresh_from_db()

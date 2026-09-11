@@ -85,7 +85,7 @@ def make_booking(db):
 
 
 def page_for(client, counselee):
-    return client.get(reverse("counseling:counselee_detail", args=[counselee.pk]))
+    return client.get(reverse("counseling:counselee_detail", args=[counselee.public_id]))
 
 
 class TestWhatTheCounselorSees:
@@ -98,8 +98,8 @@ class TestWhatTheCounselorSees:
 
         body = page_for(client, ada).content.decode()
 
-        assert reverse("scheduling:detail", args=[last_week.pk]) in body
-        assert reverse("scheduling:detail", args=[next_week.pk]) in body
+        assert reverse("scheduling:detail", args=[last_week.public_id]) in body
+        assert reverse("scheduling:detail", args=[next_week.public_id]) in body
 
     def test_a_joint_session_counts_as_theirs_even_when_the_spouse_booked_it(
         self, client, sign_in, counselor, marriage, ada, ben, make_booking
@@ -116,7 +116,7 @@ class TestWhatTheCounselorSees:
 
         body = page_for(client, ada).content.decode()
 
-        assert reverse("scheduling:detail", args=[joint.pk]) in body
+        assert reverse("scheduling:detail", args=[joint.public_id]) in body
 
     def test_what_they_have_sent_in(self, client, sign_in, counselor, marriage, ada):
         document = store_document(
@@ -128,7 +128,7 @@ class TestWhatTheCounselorSees:
 
         body = page_for(client, ada).content.decode()
 
-        assert reverse("documents:detail", args=[document.pk]) in body
+        assert reverse("documents:detail", args=[document.public_id]) in body
 
     def test_a_document_filed_against_a_session_says_which(
         self, client, sign_in, counselor, marriage, ada, make_booking
@@ -144,7 +144,7 @@ class TestWhatTheCounselorSees:
 
         body = page_for(client, ada).content.decode()
 
-        assert reverse("scheduling:detail", args=[booking.pk]) in body
+        assert reverse("scheduling:detail", args=[booking.public_id]) in body
 
     def test_their_own_session_notes(self, client, sign_in, counselor, marriage, ada, make_booking):
         session = make_booking(marriage, ada, days=-7)
@@ -191,7 +191,7 @@ class TestWhatTheGatheringDoesNotPullIn:
 
         body = page_for(client, ada).content.decode()
 
-        assert reverse("documents:detail", args=[bens.pk]) not in body
+        assert reverse("documents:detail", args=[bens.public_id]) not in body
 
     def test_but_something_shared_with_the_whole_case_is(
         self, client, sign_in, counselor, marriage, ada
@@ -207,7 +207,7 @@ class TestWhatTheGatheringDoesNotPullIn:
 
         body = page_for(client, ada).content.decode()
 
-        assert reverse("documents:detail", args=[handout.pk]) in body
+        assert reverse("documents:detail", args=[handout.public_id]) in body
 
     def test_another_counselors_case_for_the_same_person_stays_theirs(
         self, client, sign_in, counselor, other_counselor, marriage, ada, make_booking
@@ -226,7 +226,7 @@ class TestWhatTheGatheringDoesNotPullIn:
         body = page_for(client, ada).content.decode()
 
         assert "Ashford — individual" not in body
-        assert reverse("scheduling:detail", args=[theirs.pk]) not in body
+        assert reverse("scheduling:detail", args=[theirs.public_id]) not in body
 
 
 class TestWhoCanOpenIt:
@@ -270,16 +270,18 @@ class TestItIsReachableByClicking:
     def test_from_the_case_page(self, client, sign_in, counselor, marriage, ada):
         sign_in(counselor)
 
-        body = client.get(reverse("counseling:case_detail", args=[marriage.pk])).content.decode()
+        body = client.get(
+            reverse("counseling:case_detail", args=[marriage.public_id])
+        ).content.decode()
 
-        assert reverse("counseling:counselee_detail", args=[ada.pk]) in body
+        assert reverse("counseling:counselee_detail", args=[ada.public_id]) in body
 
     def test_and_from_the_caseload(self, client, sign_in, counselor, marriage, ada):
         sign_in(counselor)
 
         body = client.get(reverse("counseling:counselor_dashboard")).content.decode()
 
-        assert reverse("counseling:counselee_detail", args=[ada.pk]) in body
+        assert reverse("counseling:counselee_detail", args=[ada.public_id]) in body
 
     def test_billing_is_not_offered_the_link(self, client, sign_in, financial_admin, marriage, ada):
         """Billing reads the case page for the roster. A link to a page that would
@@ -287,7 +289,9 @@ class TestItIsReachableByClicking:
         counseling record."""
         sign_in(financial_admin)
 
-        body = client.get(reverse("counseling:case_detail", args=[marriage.pk])).content.decode()
+        body = client.get(
+            reverse("counseling:case_detail", args=[marriage.public_id])
+        ).content.decode()
 
         assert "Ashford" in body, "billing should still see the case and its roster"
-        assert reverse("counseling:counselee_detail", args=[ada.pk]) not in body
+        assert reverse("counseling:counselee_detail", args=[ada.public_id]) not in body

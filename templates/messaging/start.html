@@ -4,7 +4,7 @@
 {% block content %}
 <div class="card">
   <h1>Start a conversation</h1>
-  <p class="role"><a href="{% url 'messaging:case_threads' case.pk %}">{{ case.label }}</a></p>
+  <p class="role"><a href="{% url 'messaging:case_threads' case.public_id %}">{{ case.label }}</a></p>
 
   {% if user.role == 'counselee' %}
     {% comment %} Said plainly, because the alternative is someone assuming their spouse can

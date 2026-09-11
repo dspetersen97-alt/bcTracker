@@ -12,7 +12,7 @@
 <h2>Cases</h2>
 {% for row in case_rows %}
   <div class="card">
-    <h3><a href="{% url 'counseling:case_detail' row.case.pk %}">{{ row.case.label }}</a></h3>
+    <h3><a href="{% url 'counseling:case_detail' row.case.public_id %}">{{ row.case.label }}</a></h3>
     <p class="role">
       {{ row.case.get_kind_display }} · {{ row.case.get_status_display }} ·
       with {{ row.case.counselor.full_name }}
@@ -33,7 +33,7 @@
 <h2>Next appointment</h2>
 {% if next_session %}
   <p>
-    <a href="{% url 'scheduling:detail' next_session.pk %}">{{ next_session.starts_at|date:"l j F Y, g:i a" }}</a>
+    <a href="{% url 'scheduling:detail' next_session.public_id %}">{{ next_session.starts_at|date:"l j F Y, g:i a" }}</a>
     — {{ next_session.duration_minutes }} minutes,
     <span class="status status-{{ next_session.status }}">{{ next_session.get_status_display }}</span>
     {% if next_session.is_joint %}<span class="badge">whole case</span>{% endif %}
@@ -48,7 +48,7 @@
   <tbody>
     {% for session in past_sessions %}
       <tr>
-        <td><a href="{% url 'scheduling:detail' session.pk %}">{{ session.starts_at|date:"D j M Y, g:i a" }}</a></td>
+        <td><a href="{% url 'scheduling:detail' session.public_id %}">{{ session.starts_at|date:"D j M Y, g:i a" }}</a></td>
         <td>{{ session.case.label }}</td>
         <td class="status status-{{ session.status }}">
           {{ session.get_status_display }}
@@ -69,7 +69,7 @@
 {% if session_notes %}
   {% for session in session_notes %}
     <div class="card">
-      <h3><a href="{% url 'scheduling:detail' session.pk %}">{{ session.starts_at|date:"D j M Y" }}</a></h3>
+      <h3><a href="{% url 'scheduling:detail' session.public_id %}">{{ session.starts_at|date:"D j M Y" }}</a></h3>
       <p>{{ session.counselor_note|linebreaksbr }}</p>
     </div>
   {% endfor %}
@@ -86,12 +86,12 @@
   <tbody>
     {% for document in documents %}
       <tr>
-        <td><a href="{% url 'documents:detail' document.pk %}">{{ document.display_name }}</a></td>
+        <td><a href="{% url 'documents:detail' document.public_id %}">{{ document.display_name }}</a></td>
         <td>{{ document.get_kind_display }}</td>
         <td>{{ document|source_label:request.user }}</td>
         <td>
           {% if document.booking %}
-            <a href="{% url 'scheduling:detail' document.booking_id %}">{{ document.booking.starts_at|date:"j M Y" }}</a>
+            <a href="{% url 'scheduling:detail' document.booking.public_id %}">{{ document.booking.starts_at|date:"j M Y" }}</a>
           {% else %}—{% endif %}
         </td>
         <td>{{ document.created_at|date:"j M Y" }}</td>
@@ -116,7 +116,7 @@
     <dt>Intake completed</dt><dd>{{ profile.intake_completed_on|default:"Not yet" }}</dd>
   </dl>
   <div class="actions">
-    <a class="button" href="{% url 'counseling:counselee_profile_edit_for' profile.pk %}">Edit intake details</a>
+    <a class="button" href="{% url 'counseling:counselee_profile_edit_for' profile.public_id %}">Edit intake details</a>
   </div>
 {% endif %}
 {% endblock %}

@@ -119,7 +119,9 @@ def _description(booking) -> str:
     """
     from django.urls import reverse
 
-    url = f"{settings.SITE_BASE_URL}{reverse('scheduling:detail', kwargs={'pk': booking.pk})}"
+    url = settings.SITE_BASE_URL + reverse(
+        "scheduling:detail", kwargs={"public_id": booking.public_id}
+    )
     return f"Booked in bcTracker.\n{url}"
 
 

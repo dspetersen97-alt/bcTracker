@@ -31,7 +31,7 @@
              notes on one page. Guarded by counseling.view_counselee, decided in the
              view, so a financial administrator sees the name as plain text. {% endcomment %}
           {% if can_view_counselees %}
-            <a href="{% url 'counseling:counselee_detail' member.counselee_id %}">{{ member.counselee.full_name }}</a>
+            <a href="{% url 'counseling:counselee_detail' member.counselee.public_id %}">{{ member.counselee.full_name }}</a>
           {% else %}{{ member.counselee.full_name }}{% endif %}
           {% if show_notes %}<span class="muted">{{ member.counselee.email }}</span>{% endif %}
         </td>
@@ -40,7 +40,7 @@
         {% if can_manage_members %}
           <td>
             {% if not member.ended_on %}
-              <form method="post" action="{% url 'counseling:case_member_end' case.pk member.pk %}" class="inline-form">
+              <form method="post" action="{% url 'counseling:case_member_end' case.public_id member.public_id %}" class="inline-form">
                 {% csrf_token %}
                 <button type="submit" class="link-button">End membership</button>
               </form>
@@ -56,25 +56,25 @@
 
 <div class="actions">
   {% if can_see_documents %}
-    <a class="button" href="{% url 'documents:case_documents' case.pk %}">Documents</a>
+    <a class="button" href="{% url 'documents:case_documents' case.public_id %}">Documents</a>
   {% endif %}
   {% if can_see_messages %}
-    <a class="button" href="{% url 'messaging:case_threads' case.pk %}">Messages</a>
+    <a class="button" href="{% url 'messaging:case_threads' case.public_id %}">Messages</a>
   {% endif %}
   {% comment %} No permission guard: everyone who can see this page can see the case's
      appointments, financial_admin included — that is what gets invoiced. What
      appears there is still Booking.objects.for_actor, and no note is rendered. {% endcomment %}
-  <a class="button" href="{% url 'scheduling:case_appointments' case.pk %}">Appointments</a>
+  <a class="button" href="{% url 'scheduling:case_appointments' case.public_id %}">Appointments</a>
   {% comment %} Also unguarded, and for the same reason: billing.view_case_invoices allows
      everyone who can reach this page, financial_admin included. Whose invoices show up
      is Invoice.objects.for_actor's answer, not this link's. {% endcomment %}
-  <a class="button" href="{% url 'billing:case_invoices' case.pk %}">Invoices</a>
-  {% if can_change %}<a class="button" href="{% url 'counseling:case_edit' case.pk %}">Edit case</a>{% endif %}
+  <a class="button" href="{% url 'billing:case_invoices' case.public_id %}">Invoices</a>
+  {% if can_change %}<a class="button" href="{% url 'counseling:case_edit' case.public_id %}">Edit case</a>{% endif %}
   {% if can_manage_members %}
-    <a class="button" href="{% url 'counseling:case_member_add' case.pk %}">Add a counselee</a>
+    <a class="button" href="{% url 'counseling:case_member_add' case.public_id %}">Add a counselee</a>
   {% endif %}
   {% if can_close %}
-    <form method="post" action="{% url 'counseling:case_close' case.pk %}" class="inline-form">
+    <form method="post" action="{% url 'counseling:case_close' case.public_id %}" class="inline-form">
       {% csrf_token %}
       <button type="submit">Close case</button>
     </form>

@@ -4,7 +4,7 @@
 {% block content %}
 <div class="card">
   <h1>Raise an invoice</h1>
-  <p class="role"><a href="{% url 'billing:case_invoices' case.pk %}">{{ case.label }}</a></p>
+  <p class="role"><a href="{% url 'billing:case_invoices' case.public_id %}">{{ case.label }}</a></p>
 
   <p class="notice">This creates a draft. Nobody is emailed and the person being billed
     cannot see it until you send it, so there is room to get it right first.</p>

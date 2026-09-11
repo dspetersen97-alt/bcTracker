@@ -5,7 +5,7 @@
 <h1>Book an appointment</h1>
 <p class="role">
   With {{ case.counselor.full_name }} ·
-  <a href="{% url 'counseling:case_detail' case.pk %}">{{ case.label }}</a>
+  <a href="{% url 'counseling:case_detail' case.public_id %}">{{ case.label }}</a>
 </p>
 
 {% if chosen and form %}
@@ -19,7 +19,7 @@
       {% include "includes/form.html" %}
       <div class="actions">
         <button type="submit">Request this time</button>
-        <a href="{% url 'scheduling:book' case.pk %}?from={{ start_date|date:'Y-m-d' }}">Pick a different time</a>
+        <a href="{% url 'scheduling:book' case.public_id %}?from={{ start_date|date:'Y-m-d' }}">Pick a different time</a>
       </div>
     </form>
     <p class="muted">
@@ -32,7 +32,7 @@
      mean an appointment with themselves. {% endcomment %}
   <p class="notice">
     This is the list your counselees see. To put something in the diary yourself, use
-    <a href="{% url 'scheduling:schedule' case.pk %}">schedule an appointment</a>.
+    <a href="{% url 'scheduling:schedule' case.public_id %}">schedule an appointment</a>.
   </p>
 {% endif %}
 

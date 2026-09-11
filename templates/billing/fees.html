@@ -25,7 +25,7 @@
           {% comment %} Withdrawn, not deleted: invoices were raised against it. See
              views.fee_end. {% endcomment %}
           {% if not fee.effective_to %}
-            <form method="post" action="{% url 'billing:fee_end' fee.pk %}" class="inline-form">
+            <form method="post" action="{% url 'billing:fee_end' fee.public_id %}" class="inline-form">
               {% csrf_token %}
               <button type="submit" class="link-button">Withdraw</button>
             </form>

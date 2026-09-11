@@ -229,7 +229,9 @@ class TestSharedCaseIsolationThroughTheViews:
         _case, ada, _ben = couple_case
         sign_in(ada)
 
-        response = getattr(client, method)(reverse(route, kwargs={"pk": bens_letter.pk}))
+        response = getattr(client, method)(
+            reverse(route, kwargs={"public_id": bens_letter.public_id})
+        )
 
         assert response.status_code == 404
 
@@ -239,7 +241,9 @@ class TestSharedCaseIsolationThroughTheViews:
         case, ada, _ben = couple_case
         sign_in(ada)
 
-        response = client.get(reverse("documents:case_documents", kwargs={"case_pk": case.pk}))
+        response = client.get(
+            reverse("documents:case_documents", kwargs={"case_public_id": case.public_id})
+        )
 
         assert response.status_code == 200
         assert b"bens-letter" not in response.content
@@ -257,7 +261,9 @@ class TestSharedCaseIsolationThroughTheViews:
         services.share_with_case(bens_letter, actor=counselor)
         sign_in(ada)
 
-        response = client.get(reverse("documents:case_documents", kwargs={"case_pk": case.pk}))
+        response = client.get(
+            reverse("documents:case_documents", kwargs={"case_public_id": case.public_id})
+        )
 
         assert ben.first_name.encode() not in response.content
         assert b"Shared with the case" in response.content
@@ -269,7 +275,9 @@ class TestSharedCaseIsolationThroughTheViews:
         case, _ada, ben = couple_case
         sign_in(counselor)
 
-        response = client.get(reverse("documents:case_documents", kwargs={"case_pk": case.pk}))
+        response = client.get(
+            reverse("documents:case_documents", kwargs={"case_public_id": case.public_id})
+        )
 
         assert ben.first_name.encode() in response.content
 
@@ -280,21 +288,38 @@ class TestSharedCaseIsolationThroughTheViews:
         services.share_with_case(bens_letter, actor=counselor)
         sign_in(ada)
 
-        assert client.get(reverse("documents:detail", args=[bens_letter.pk])).status_code == 200
-        assert client.get(reverse("documents:download", args=[bens_letter.pk])).status_code == 200
+        assert (
+            client.get(reverse("documents:detail", args=[bens_letter.public_id])).status_code == 200
+        )
+        assert (
+            client.get(reverse("documents:download", args=[bens_letter.public_id])).status_code
+            == 200
+        )
         # Reading is not owning: Ada can neither relabel it, withdraw it, nor take
         # back the counselor's decision to share it.
-        assert client.get(reverse("documents:edit", args=[bens_letter.pk])).status_code == 403
-        assert client.post(reverse("documents:delete", args=[bens_letter.pk])).status_code == 403
-        assert client.post(reverse("documents:share", args=[bens_letter.pk])).status_code == 403
+        assert (
+            client.get(reverse("documents:edit", args=[bens_letter.public_id])).status_code == 403
+        )
+        assert (
+            client.post(reverse("documents:delete", args=[bens_letter.public_id])).status_code
+            == 403
+        )
+        assert (
+            client.post(reverse("documents:share", args=[bens_letter.public_id])).status_code == 403
+        )
 
     def test_a_counselor_from_another_case_gets_404(
         self, bens_letter, client, sign_in, other_counselor
     ):
         sign_in(other_counselor)
 
-        assert client.get(reverse("documents:detail", args=[bens_letter.pk])).status_code == 404
-        assert client.get(reverse("documents:download", args=[bens_letter.pk])).status_code == 404
+        assert (
+            client.get(reverse("documents:detail", args=[bens_letter.public_id])).status_code == 404
+        )
+        assert (
+            client.get(reverse("documents:download", args=[bens_letter.public_id])).status_code
+            == 404
+        )
 
 
 class TestWhatBillingCanReach:
@@ -312,7 +337,9 @@ class TestWhatBillingCanReach:
         store(case, ada)
         sign_in(financial_admin)
 
-        response = client.get(reverse("documents:case_documents", kwargs={"case_pk": case.pk}))
+        response = client.get(
+            reverse("documents:case_documents", kwargs={"case_public_id": case.public_id})
+        )
 
         assert response.status_code == 403
 
@@ -326,7 +353,10 @@ class TestWhatBillingCanReach:
         sign_in(financial_admin)
 
         assert (
-            client.get(reverse("documents:upload", kwargs={"case_pk": case.pk})).status_code == 403
+            client.get(
+                reverse("documents:upload", kwargs={"case_public_id": case.public_id})
+            ).status_code
+            == 403
         )
 
     def test_a_document_does_not_exist_as_far_as_billing_is_concerned(
@@ -336,8 +366,10 @@ class TestWhatBillingCanReach:
         document = store(case, ada)
         sign_in(financial_admin)
 
-        assert client.get(reverse("documents:detail", args=[document.pk])).status_code == 404
-        assert client.get(reverse("documents:download", args=[document.pk])).status_code == 404
+        assert client.get(reverse("documents:detail", args=[document.public_id])).status_code == 404
+        assert (
+            client.get(reverse("documents:download", args=[document.public_id])).status_code == 404
+        )
 
     def test_the_permission_itself_is_never_granted(self, couple_case, store, financial_admin):
         """Belt and braces: the predicate says no even holding the object.
@@ -363,7 +395,7 @@ class TestUploading:
         sign_in(ada)
 
         response = client.post(
-            reverse("documents:upload", kwargs={"case_pk": case.pk}),
+            reverse("documents:upload", kwargs={"case_public_id": case.public_id}),
             upload_payload(name="week-one.pdf"),
         )
 
@@ -385,7 +417,9 @@ class TestUploading:
         case, ada, _ben = couple_case
         sign_in(ada)
 
-        client.post(reverse("documents:upload", kwargs={"case_pk": case.pk}), upload_payload())
+        client.post(
+            reverse("documents:upload", kwargs={"case_public_id": case.public_id}), upload_payload()
+        )
 
         assert Document.objects.get().visibility == Visibility.PRIVATE
 
@@ -401,7 +435,7 @@ class TestUploading:
         sign_in(ada)
 
         client.post(
-            reverse("documents:upload", kwargs={"case_pk": case.pk}),
+            reverse("documents:upload", kwargs={"case_public_id": case.public_id}),
             upload_payload(visibility=Visibility.CASE_SHARED),
         )
 
@@ -414,7 +448,7 @@ class TestUploading:
         sign_in(counselor)
 
         client.post(
-            reverse("documents:upload", kwargs={"case_pk": case.pk}),
+            reverse("documents:upload", kwargs={"case_public_id": case.public_id}),
             upload_payload(name="handout.pdf", visibility=Visibility.CASE_SHARED),
         )
 
@@ -430,7 +464,7 @@ class TestUploading:
         sign_in(other_counselor)
 
         response = client.post(
-            reverse("documents:upload", kwargs={"case_pk": case.pk}), upload_payload()
+            reverse("documents:upload", kwargs={"case_public_id": case.public_id}), upload_payload()
         )
 
         assert response.status_code == 404
@@ -442,7 +476,7 @@ class TestUploading:
         sign_in(ada)
 
         response = client.post(
-            reverse("documents:upload", kwargs={"case_pk": case.pk}), upload_payload()
+            reverse("documents:upload", kwargs={"case_public_id": case.public_id}), upload_payload()
         )
 
         assert response.status_code == 404
@@ -466,7 +500,7 @@ class TestUploading:
         sign_in(ada)
 
         response = client.post(
-            reverse("documents:upload", kwargs={"case_pk": case.pk}),
+            reverse("documents:upload", kwargs={"case_public_id": case.public_id}),
             upload_payload(name=name, data=data),
         )
 
@@ -481,7 +515,7 @@ class TestUploading:
         sign_in(ada)
 
         response = client.post(
-            reverse("documents:upload", kwargs={"case_pk": case.pk}),
+            reverse("documents:upload", kwargs={"case_public_id": case.public_id}),
             upload_payload(data=b"%PDF-1.7\n" + b"x" * 500),
         )
 
@@ -505,7 +539,7 @@ class TestUploading:
         sign_in(ada)
 
         response = client.post(
-            reverse("documents:upload", kwargs={"case_pk": case.pk}), upload_payload()
+            reverse("documents:upload", kwargs={"case_public_id": case.public_id}), upload_payload()
         )
 
         assert response.context["form"].errors
@@ -533,7 +567,10 @@ class TestUploading:
         sign_in(ada)
 
         with pytest.raises(scanning.ScannerUnavailable):
-            client.post(reverse("documents:upload", kwargs={"case_pk": case.pk}), upload_payload())
+            client.post(
+                reverse("documents:upload", kwargs={"case_public_id": case.public_id}),
+                upload_payload(),
+            )
 
         assert not Document.objects.exists()
         assert not list(_document_store.rglob("*"))
@@ -549,7 +586,9 @@ class TestUploading:
         case, ada, _ben = couple_case
         sign_in(ada)
 
-        client.post(reverse("documents:upload", kwargs={"case_pk": case.pk}), upload_payload())
+        client.post(
+            reverse("documents:upload", kwargs={"case_public_id": case.public_id}), upload_payload()
+        )
 
         blobs = [path for path in _document_store.rglob("*") if path.is_file()]
         assert blobs, "something should have been written"
@@ -560,7 +599,9 @@ class TestUploading:
         case, ada, _ben = couple_case
         sign_in(ada)
 
-        client.post(reverse("documents:upload", kwargs={"case_pk": case.pk}), upload_payload())
+        client.post(
+            reverse("documents:upload", kwargs={"case_public_id": case.public_id}), upload_payload()
+        )
 
         document = Document.objects.get()
         event = AuditEvent.objects.get(verb=AuditVerb.DOCUMENT_UPLOADED)
@@ -591,13 +632,13 @@ class TestPhotographs:
         sign_in(ada)
 
         client.post(
-            reverse("documents:upload", kwargs={"case_pk": case.pk}),
+            reverse("documents:upload", kwargs={"case_public_id": case.public_id}),
             upload_payload(name="kitchen-table.jpg", data=original),
         )
 
         document = Document.objects.get()
         downloaded = b"".join(
-            client.get(reverse("documents:download", args=[document.pk])).streaming_content
+            client.get(reverse("documents:download", args=[document.public_id])).streaming_content
         )
         assert not Image.open(io.BytesIO(downloaded)).getexif().get_ifd(0x8825)
 
@@ -634,7 +675,7 @@ class TestPhotographs:
         document = store(case, ada, name="photo.jpg", data=jpeg_bytes())
         sign_in(ada)
 
-        response = client.get(reverse("documents:thumbnail", args=[document.pk]))
+        response = client.get(reverse("documents:thumbnail", args=[document.public_id]))
 
         assert response.status_code == 200
         assert response["Content-Type"] == "image/jpeg"
@@ -648,7 +689,9 @@ class TestPhotographs:
         document = store(case, ada)
         sign_in(ada)
 
-        assert client.get(reverse("documents:thumbnail", args=[document.pk])).status_code == 404
+        assert (
+            client.get(reverse("documents:thumbnail", args=[document.public_id])).status_code == 404
+        )
 
 
 class TestDownloading:
@@ -657,7 +700,7 @@ class TestDownloading:
         document = store(case, ada)
         sign_in(ada)
 
-        response = client.get(reverse("documents:download", args=[document.pk]))
+        response = client.get(reverse("documents:download", args=[document.public_id]))
 
         assert b"".join(response.streaming_content) == PDF
 
@@ -672,7 +715,7 @@ class TestDownloading:
         document = store(case, ada)
         sign_in(ada)
 
-        response = client.get(reverse("documents:download", args=[document.pk]))
+        response = client.get(reverse("documents:download", args=[document.public_id]))
 
         assert response["Content-Disposition"].startswith("attachment;")
         assert response["X-Content-Type-Options"] == "nosniff"
@@ -689,7 +732,7 @@ class TestDownloading:
         )
         sign_in(ada)
 
-        response = client.get(reverse("documents:download", args=[document.pk]))
+        response = client.get(reverse("documents:download", args=[document.public_id]))
 
         assert response["Content-Type"] == "application/pdf"
 
@@ -699,7 +742,7 @@ class TestDownloading:
         document = store(case, ada, name='we"ird; drop.pdf')
         sign_in(ada)
 
-        disposition = client.get(reverse("documents:download", args=[document.pk]))[
+        disposition = client.get(reverse("documents:download", args=[document.public_id]))[
             "Content-Disposition"
         ]
 
@@ -711,7 +754,7 @@ class TestDownloading:
         document = store(case, ada, name="bénédiction.pdf")
         sign_in(ada)
 
-        disposition = client.get(reverse("documents:download", args=[document.pk]))[
+        disposition = client.get(reverse("documents:download", args=[document.public_id]))[
             "Content-Disposition"
         ]
 
@@ -724,7 +767,7 @@ class TestDownloading:
         document = store(case, ada)
         sign_in(ada)
 
-        client.get(reverse("documents:download", args=[document.pk]))
+        client.get(reverse("documents:download", args=[document.public_id]))
 
         event = AuditEvent.objects.get(verb=AuditVerb.DOCUMENT_DOWNLOADED)
         assert event.actor == ada
@@ -750,7 +793,7 @@ class TestDownloading:
         sign_in(ada)
 
         with pytest.raises(RuntimeError):
-            client.get(reverse("documents:download", args=[document.pk]))
+            client.get(reverse("documents:download", args=[document.public_id]))
 
     def test_a_missing_blob_is_a_404_rather_than_a_crash(self, couple_case, store, client, sign_in):
         """What a restore that missed the document volume looks like."""
@@ -759,7 +802,9 @@ class TestDownloading:
         storage.delete_blob(document.storage_key)
         sign_in(ada)
 
-        assert client.get(reverse("documents:download", args=[document.pk])).status_code == 404
+        assert (
+            client.get(reverse("documents:download", args=[document.public_id])).status_code == 404
+        )
 
     def test_a_tampered_blob_does_not_produce_a_plausible_file(
         self, couple_case, store, client, sign_in
@@ -779,7 +824,7 @@ class TestDownloading:
         path.write_bytes(bytes(corrupted))
         sign_in(ada)
 
-        response = client.get(reverse("documents:download", args=[document.pk]))
+        response = client.get(reverse("documents:download", args=[document.public_id]))
 
         with pytest.raises(DecryptionError):
             b"".join(response.streaming_content)
@@ -810,7 +855,7 @@ class TestSharing:
         document = store(case, ben)
         sign_in(counselor)
 
-        response = client.post(reverse("documents:share", args=[document.pk]))
+        response = client.post(reverse("documents:share", args=[document.public_id]))
 
         document.refresh_from_db()
         assert response.status_code == 302
@@ -833,7 +878,7 @@ class TestSharing:
         document = store(case, ben)
         sign_in(ben)
 
-        response = client.post(reverse("documents:share", args=[document.pk]))
+        response = client.post(reverse("documents:share", args=[document.public_id]))
 
         document.refresh_from_db()
         assert response.status_code == 403
@@ -845,7 +890,7 @@ class TestSharing:
         document = store(case, ben)
         sign_in(ben)
 
-        client.post(reverse("documents:share", args=[document.pk]))
+        client.post(reverse("documents:share", args=[document.public_id]))
 
         denial = AuditEvent.objects.get(verb=AuditVerb.ACCESS_DENIED)
         assert denial.actor == ben
@@ -858,7 +903,7 @@ class TestSharing:
         document = store(case, ben, visibility=Visibility.CASE_SHARED)
         sign_in(counselor)
 
-        client.post(reverse("documents:share", args=[document.pk]))
+        client.post(reverse("documents:share", args=[document.public_id]))
 
         document.refresh_from_db()
         assert document.visibility == Visibility.PRIVATE
@@ -877,7 +922,7 @@ class TestSharing:
         document = store(case, ben)
         sign_in(counselor)
 
-        response = client.post(reverse("documents:share", args=[document.pk]), follow=True)
+        response = client.post(reverse("documents:share", args=[document.public_id]), follow=True)
 
         assert any("keeps what they have read" in str(m) for m in response.context["messages"])
 
@@ -890,7 +935,7 @@ class TestWithdrawing:
         document = store(case, ben)
         sign_in(ben)
 
-        response = client.post(reverse("documents:delete", args=[document.pk]))
+        response = client.post(reverse("documents:delete", args=[document.public_id]))
 
         assert response.status_code == 302
         assert not Document.objects.for_actor(ben).exists()
@@ -906,7 +951,7 @@ class TestWithdrawing:
         document = store(case, ben)
         sign_in(ben)
 
-        client.post(reverse("documents:delete", args=[document.pk]))
+        client.post(reverse("documents:delete", args=[document.public_id]))
 
         assert storage.blob_exists(document.storage_key)
         assert Document.all_objects.get(pk=document.pk).deleted_at is not None
@@ -917,7 +962,7 @@ class TestWithdrawing:
         document = store(case, ben)
         sign_in(ben)
 
-        client.post(reverse("documents:delete", args=[document.pk]))
+        client.post(reverse("documents:delete", args=[document.public_id]))
 
         event = AuditEvent.objects.get(verb=AuditVerb.DOCUMENT_DELETED)
         assert event.actor == ben
@@ -930,7 +975,7 @@ class TestWithdrawing:
         handout = store(case, counselor, name="handout.pdf", visibility=Visibility.CASE_SHARED)
         sign_in(ada)
 
-        response = client.post(reverse("documents:delete", args=[handout.pk]))
+        response = client.post(reverse("documents:delete", args=[handout.public_id]))
 
         assert response.status_code == 403
         assert Document.objects.filter(pk=handout.pk).exists()
@@ -941,9 +986,11 @@ class TestWithdrawing:
         case, _ada, ben = couple_case
         document = store(case, ben)
         sign_in(ben)
-        client.post(reverse("documents:delete", args=[document.pk]))
+        client.post(reverse("documents:delete", args=[document.public_id]))
 
-        assert client.get(reverse("documents:download", args=[document.pk])).status_code == 404
+        assert (
+            client.get(reverse("documents:download", args=[document.public_id])).status_code == 404
+        )
 
 
 class TestEditingTheLabels:
@@ -953,7 +1000,7 @@ class TestEditingTheLabels:
         sign_in(ben)
 
         client.post(
-            reverse("documents:edit", args=[document.pk]),
+            reverse("documents:edit", args=[document.public_id]),
             {"title": "Week one homework", "description": "Finished late.", "kind": "homework"},
         )
 
@@ -972,7 +1019,7 @@ class TestEditingTheLabels:
         sign_in(ben)
 
         client.post(
-            reverse("documents:edit", args=[document.pk]),
+            reverse("documents:edit", args=[document.public_id]),
             {
                 "title": "Homework",
                 "description": "",
@@ -1008,7 +1055,7 @@ class TestTheRecordOfWhoLooked:
         document = store(case, ben)
         sign_in(counselor)
 
-        client.get(reverse("documents:detail", args=[document.pk]))
+        client.get(reverse("documents:detail", args=[document.public_id]))
 
         event = AuditEvent.objects.get(verb=AuditVerb.DOCUMENT_VIEWED)
         assert event.actor == counselor
@@ -1026,7 +1073,7 @@ class TestTheRecordOfWhoLooked:
         case, _ada, ben = couple_case
         document = store(case, ben)
         sign_in(counselor)
-        client.get(reverse("documents:download", args=[document.pk]))
+        client.get(reverse("documents:download", args=[document.public_id]))
 
         services.soft_delete_document(document, actor=counselor)
 

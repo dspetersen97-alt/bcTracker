@@ -43,11 +43,11 @@ from apps.messaging.models import MessageAttachment, Thread
 logger = logging.getLogger(__name__)
 
 
-def visible_case_or_404(request, pk):
-    return get_object_or_404(Case.objects.for_actor(request.user), pk=pk)
+def visible_case_or_404(request, public_id):
+    return get_object_or_404(Case.objects.for_actor(request.user), public_id=public_id)
 
 
-def visible_attachment_or_404(request, pk):
+def visible_attachment_or_404(request, public_id):
     """The single door onto a MessageAttachment.
 
     ``MessageAttachment.objects.for_actor`` filters on
@@ -59,11 +59,11 @@ def visible_attachment_or_404(request, pk):
         MessageAttachment.objects.for_actor(request.user).select_related(
             "message", "message__thread", "message__thread__case"
         ),
-        pk=pk,
+        public_id=public_id,
     )
 
 
-def visible_thread_or_404(request, pk):
+def visible_thread_or_404(request, public_id):
     """The single door onto a Thread.
 
     ``for_actor`` is what makes "a spouse cannot reach the other's correspondence"
@@ -72,7 +72,7 @@ def visible_thread_or_404(request, pk):
     """
     return get_object_or_404(
         Thread.objects.for_actor(request.user).select_related("case", "case__counselor"),
-        pk=pk,
+        public_id=public_id,
     )
 
 
@@ -110,14 +110,14 @@ def index(request):
 
 
 @login_required
-def case_threads(request, case_pk):
+def case_threads(request, case_public_id):
     """The conversations on one case.
 
     A counselee sees only their own, because the queryset requires a participant
     row. There is no count of the ones they cannot see, for the reason the
     documents list gives none: a number is content.
     """
-    case = visible_case_or_404(request, case_pk)
+    case = visible_case_or_404(request, case_public_id)
     require_perm(request, "messaging.view_case_threads", case)
 
     threads = services.with_unread(
@@ -139,8 +139,8 @@ def case_threads(request, case_pk):
 
 @login_required
 @require_http_methods(["GET", "POST"])
-def start(request, case_pk):
-    case = visible_case_or_404(request, case_pk)
+def start(request, case_public_id):
+    case = visible_case_or_404(request, case_public_id)
     require_perm(request, "messaging.add_thread", case)
 
     form = ThreadStartForm(
@@ -161,15 +161,15 @@ def start(request, case_pk):
             form.add_error(None, str(exc))
         else:
             flash.success(request, _("Sent."))
-            return redirect("messaging:thread", pk=thread.pk)
+            return redirect("messaging:thread", public_id=thread.public_id)
 
     return render(request, "messaging/start.html", {"form": form, "case": case})
 
 
 @login_required
 @require_http_methods(["GET", "POST"])
-def thread(request, pk):
-    thread = visible_thread_or_404(request, pk)
+def thread(request, public_id):
+    thread = visible_thread_or_404(request, public_id)
     require_perm(request, "messaging.view_thread", thread)
 
     form = ReplyForm(request.POST or None, request.FILES or None)
@@ -190,7 +190,7 @@ def thread(request, pk):
                 form.add_error("body", str(exc))
             else:
                 flash.success(request, _("Sent."))
-                return redirect("messaging:thread", pk=thread.pk)
+                return redirect("messaging:thread", public_id=thread.public_id)
 
     record(
         AuditVerb.THREAD_VIEWED,
@@ -223,7 +223,7 @@ def thread(request, pk):
 
 
 @login_required
-def attachment(request, pk):
+def attachment(request, public_id):
     """Stream the decrypted file that came with a message.
 
     The permission check and the audit row are inside ``open_attachment`` rather
@@ -235,7 +235,7 @@ def attachment(request, pk):
     confidence, and a filing cabinet is worth that cost in a way a conversation is
     not — the message says what the file is.
     """
-    attachment = visible_attachment_or_404(request, pk)
+    attachment = visible_attachment_or_404(request, public_id)
 
     try:
         frames = services.open_attachment(attachment, actor=request.user, request=request)
@@ -261,8 +261,8 @@ def attachment(request, pk):
 
 @login_required
 @require_POST
-def close(request, pk):
-    thread = visible_thread_or_404(request, pk)
+def close(request, public_id):
+    thread = visible_thread_or_404(request, public_id)
     require_perm(request, "messaging.close_thread", thread)
 
     services.close_thread(thread, actor=request.user, request=request)
@@ -270,15 +270,15 @@ def close(request, pk):
         request,
         _("Closed. Nothing has been deleted — it can be reopened if there is more to say."),
     )
-    return redirect("messaging:thread", pk=thread.pk)
+    return redirect("messaging:thread", public_id=thread.public_id)
 
 
 @login_required
 @require_POST
-def reopen(request, pk):
-    thread = visible_thread_or_404(request, pk)
+def reopen(request, public_id):
+    thread = visible_thread_or_404(request, public_id)
     require_perm(request, "messaging.reopen_thread", thread)
 
     services.reopen_thread(thread, actor=request.user, request=request)
     flash.success(request, _("Reopened."))
-    return redirect("messaging:thread", pk=thread.pk)
+    return redirect("messaging:thread", public_id=thread.public_id)

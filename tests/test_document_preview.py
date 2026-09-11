@@ -56,7 +56,7 @@ def store(case, counselee):
 
 
 def preview_url(document):
-    return reverse("documents:preview", args=[document.pk])
+    return reverse("documents:preview", args=[document.public_id])
 
 
 class TestWhatMayBeShownInline:
@@ -235,7 +235,7 @@ class TestWhatThePageOffers:
         document = store(name="photo.jpg", data=jpeg_bytes())
         sign_in(counselee)
 
-        page = client.get(reverse("documents:detail", args=[document.pk])).content.decode()
+        page = client.get(reverse("documents:detail", args=[document.public_id])).content.decode()
 
         assert preview_url(document) in page
 
@@ -243,7 +243,7 @@ class TestWhatThePageOffers:
         document = store()
         sign_in(counselee)
 
-        page = client.get(reverse("documents:detail", args=[document.pk])).content.decode()
+        page = client.get(reverse("documents:detail", args=[document.public_id])).content.decode()
 
         assert preview_url(document) in page
 
@@ -254,7 +254,7 @@ class TestWhatThePageOffers:
         document = store(name="records.docx", data=_docx_bytes())
         sign_in(counselee)
 
-        page = client.get(reverse("documents:detail", args=[document.pk])).content.decode()
+        page = client.get(reverse("documents:detail", args=[document.public_id])).content.decode()
 
         assert preview_url(document) not in page
 

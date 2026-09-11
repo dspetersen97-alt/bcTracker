@@ -105,7 +105,10 @@ class TestSpousesOnOneCase:
         sign_in(ada)
 
         assert (
-            client.get(reverse("billing:invoice_detail", kwargs={"pk": his.pk})).status_code == 404
+            client.get(
+                reverse("billing:invoice_detail", kwargs={"public_id": his.public_id})
+            ).status_code
+            == 404
         )
 
     def test_the_lines_and_payments_are_invisible_too(self, couple_case, financial_admin):
@@ -139,7 +142,9 @@ class TestSpousesOnOneCase:
         case, ada, _ben, hers, his = couple_case
         sign_in(ada)
 
-        response = client.get(reverse("billing:case_invoices", kwargs={"case_pk": case.pk}))
+        response = client.get(
+            reverse("billing:case_invoices", kwargs={"case_public_id": case.public_id})
+        )
 
         assert list(response.context["invoices"]) == [hers]
         assert his.number not in response.content.decode()
@@ -154,7 +159,7 @@ class TestSpousesOnOneCase:
 
         assert hers.number in body
         assert his.number not in body
-        assert reverse("billing:invoice_detail", kwargs={"pk": his.pk}) not in body
+        assert reverse("billing:invoice_detail", kwargs={"public_id": his.public_id}) not in body
 
     def test_neither_can_start_paying_the_others(self, client, sign_in, couple_case):
         """Not merely refused — invisible. A payer being able to settle their spouse's
@@ -162,7 +167,10 @@ class TestSpousesOnOneCase:
         _case, ada, _ben, _hers, his = couple_case
         sign_in(ada)
 
-        assert client.post(reverse("billing:pay", kwargs={"pk": his.pk})).status_code == 404
+        assert (
+            client.post(reverse("billing:pay", kwargs={"public_id": his.public_id})).status_code
+            == 404
+        )
 
     def test_the_counselor_sees_both(self, couple_case, counselor):
         _case, _ada, _ben, hers, his = couple_case
@@ -189,7 +197,9 @@ class TestADraftIsNobodysBusinessButTheOffices:
         sign_in(ada)
 
         assert (
-            client.get(reverse("billing:invoice_detail", kwargs={"pk": draft.pk})).status_code
+            client.get(
+                reverse("billing:invoice_detail", kwargs={"public_id": draft.public_id})
+            ).status_code
             == 403
         )
 
@@ -206,7 +216,7 @@ class TestADraftIsNobodysBusinessButTheOffices:
         sign_in(ada)
 
         body = client.get(
-            reverse("billing:case_invoices", kwargs={"case_pk": case.pk})
+            reverse("billing:case_invoices", kwargs={"case_public_id": case.public_id})
         ).content.decode()
 
         assert draft.number not in body
@@ -215,13 +225,18 @@ class TestADraftIsNobodysBusinessButTheOffices:
         _case, ada, *_ = couple_case
         sign_in(ada)
 
-        assert client.post(reverse("billing:pay", kwargs={"pk": draft.pk})).status_code == 403
+        assert (
+            client.post(reverse("billing:pay", kwargs={"public_id": draft.public_id})).status_code
+            == 403
+        )
 
     def test_the_office_can_see_it(self, client, sign_in, financial_admin, draft):
         sign_in(financial_admin)
 
         assert (
-            client.get(reverse("billing:invoice_detail", kwargs={"pk": draft.pk})).status_code
+            client.get(
+                reverse("billing:invoice_detail", kwargs={"public_id": draft.public_id})
+            ).status_code
             == 200
         )
 
@@ -231,7 +246,7 @@ class TestADraftIsNobodysBusinessButTheOffices:
         _case, ada, *_ = couple_case
         sign_in(ada)
 
-        client.get(reverse("billing:invoice_detail", kwargs={"pk": draft.pk}))
+        client.get(reverse("billing:invoice_detail", kwargs={"public_id": draft.public_id}))
 
         assert AuditEvent.objects.filter(
             verb=AuditVerb.ACCESS_DENIED, actor=ada, metadata__permission="billing.view_invoice"
@@ -248,7 +263,10 @@ class TestAnotherCounselorsCase:
         sign_in(other_counselor)
 
         assert (
-            client.get(reverse("billing:invoice_detail", kwargs={"pk": hers.pk})).status_code == 404
+            client.get(
+                reverse("billing:invoice_detail", kwargs={"public_id": hers.public_id})
+            ).status_code
+            == 404
         )
 
     def test_the_case_invoices_page_is_a_404_because_the_case_is_invisible(
@@ -257,7 +275,9 @@ class TestAnotherCounselorsCase:
         case, *_ = couple_case
         sign_in(other_counselor)
 
-        response = client.get(reverse("billing:case_invoices", kwargs={"case_pk": case.pk}))
+        response = client.get(
+            reverse("billing:case_invoices", kwargs={"case_public_id": case.public_id})
+        )
 
         assert response.status_code == 404
 
@@ -271,14 +291,19 @@ class TestACounselorReadsAndNeverWrites:
         sign_in(counselor)
 
         assert (
-            client.get(reverse("billing:invoice_detail", kwargs={"pk": hers.pk})).status_code == 200
+            client.get(
+                reverse("billing:invoice_detail", kwargs={"public_id": hers.public_id})
+            ).status_code
+            == 200
         )
 
     def test_the_page_offers_them_nothing_to_click(self, client, sign_in, couple_case, counselor):
         _case, _ada, _ben, hers, _his = couple_case
         sign_in(counselor)
 
-        response = client.get(reverse("billing:invoice_detail", kwargs={"pk": hers.pk}))
+        response = client.get(
+            reverse("billing:invoice_detail", kwargs={"public_id": hers.public_id})
+        )
 
         flags = response.context
         assert not any(
@@ -304,14 +329,16 @@ class TestACounselorReadsAndNeverWrites:
         _case, _ada, _ben, hers, _his = couple_case
         sign_in(counselor)
 
-        assert client.get(reverse(route, kwargs={"pk": hers.pk})).status_code == 403
+        assert client.get(reverse(route, kwargs={"public_id": hers.public_id})).status_code == 403
 
     def test_they_cannot_raise_one_on_their_own_case(self, client, sign_in, couple_case, counselor):
         case, *_ = couple_case
         sign_in(counselor)
 
         assert (
-            client.get(reverse("billing:invoice_create", kwargs={"case_pk": case.pk})).status_code
+            client.get(
+                reverse("billing:invoice_create", kwargs={"case_public_id": case.public_id})
+            ).status_code
             == 403
         )
 
@@ -320,7 +347,7 @@ class TestACounselorReadsAndNeverWrites:
         sign_in(counselor)
 
         response = client.post(
-            reverse("billing:payment_record", kwargs={"pk": hers.pk}),
+            reverse("billing:payment_record", kwargs={"public_id": hers.public_id}),
             {"amount": "85.00", "method": PaymentMethod.CHECK, "received_on": org_today()},
         )
 
@@ -348,7 +375,7 @@ class TestThePayerCanSeeAndPayAndNothingElse:
         sign_in(ada)
 
         response = client.post(
-            reverse("billing:payment_record", kwargs={"pk": hers.pk}),
+            reverse("billing:payment_record", kwargs={"public_id": hers.public_id}),
             {"amount": "85.00", "method": PaymentMethod.CASH, "received_on": org_today()},
         )
 
@@ -360,7 +387,9 @@ class TestThePayerCanSeeAndPayAndNothingElse:
         sign_in(ada)
 
         assert (
-            client.get(reverse("billing:invoice_write_off", kwargs={"pk": hers.pk})).status_code
+            client.get(
+                reverse("billing:invoice_write_off", kwargs={"public_id": hers.public_id})
+            ).status_code
             == 403
         )
 
@@ -369,7 +398,7 @@ class TestThePayerCanSeeAndPayAndNothingElse:
         sign_in(ada)
 
         response = client.post(
-            reverse("billing:line_add", kwargs={"pk": hers.pk}),
+            reverse("billing:line_add", kwargs={"public_id": hers.public_id}),
             {"description": "A discount", "amount": "-50.00", "quantity": 1},
         )
 
@@ -382,7 +411,9 @@ class TestThePayerCanSeeAndPayAndNothingElse:
         sign_in(ada)
 
         assert (
-            client.get(reverse("billing:session_amend", kwargs={"pk": session.pk})).status_code
+            client.get(
+                reverse("billing:session_amend", kwargs={"public_id": session.public_id})
+            ).status_code
             == 403
         )
 
@@ -440,7 +471,9 @@ class TestFinancialAdmin:
 
         assert list(Document.objects.for_actor(financial_admin)) == []
         assert (
-            client.get(reverse("documents:case_documents", kwargs={"case_pk": case.pk})).status_code
+            client.get(
+                reverse("documents:case_documents", kwargs={"case_public_id": case.public_id})
+            ).status_code
             == 403
         )
 
@@ -455,7 +488,9 @@ class TestFinancialAdmin:
         assert list(Thread.objects.for_actor(financial_admin)) == []
         assert list(Message.objects.for_actor(financial_admin)) == []
         assert (
-            client.get(reverse("messaging:case_threads", kwargs={"case_pk": case.pk})).status_code
+            client.get(
+                reverse("messaging:case_threads", kwargs={"case_public_id": case.public_id})
+            ).status_code
             == 403
         )
 
@@ -488,7 +523,9 @@ class TestFinancialAdmin:
         )
         sign_in(financial_admin)
 
-        response = client.get(reverse("billing:case_invoices", kwargs={"case_pk": case.pk}))
+        response = client.get(
+            reverse("billing:case_invoices", kwargs={"case_public_id": case.public_id})
+        )
 
         # The session is theirs to bill — it is on the page, priced. What was said in
         # it is not, and there is nowhere on the row for it to be: no field on
@@ -506,10 +543,10 @@ class TestFinancialAdmin:
             reverse("billing:index"),
             reverse("billing:fees"),
             reverse("billing:fee_add"),
-            reverse("billing:invoice_create", kwargs={"case_pk": case.pk}),
-            reverse("billing:invoice_detail", kwargs={"pk": hers.pk}),
-            reverse("billing:payment_record", kwargs={"pk": hers.pk}),
-            reverse("billing:invoice_void", kwargs={"pk": hers.pk}),
+            reverse("billing:invoice_create", kwargs={"case_public_id": case.public_id}),
+            reverse("billing:invoice_detail", kwargs={"public_id": hers.public_id}),
+            reverse("billing:payment_record", kwargs={"public_id": hers.public_id}),
+            reverse("billing:invoice_void", kwargs={"public_id": hers.public_id}),
         ):
             assert client.get(url).status_code == 200, url
 
@@ -520,12 +557,17 @@ class TestFinancialAdmin:
         sign_in(financial_admin)
 
         body = client.get(
-            reverse("counseling:case_detail", kwargs={"pk": case.pk})
+            reverse("counseling:case_detail", kwargs={"public_id": case.public_id})
         ).content.decode()
 
-        assert reverse("billing:case_invoices", kwargs={"case_pk": case.pk}) in body
-        assert reverse("documents:case_documents", kwargs={"case_pk": case.pk}) not in body
-        assert reverse("messaging:case_threads", kwargs={"case_pk": case.pk}) not in body
+        assert reverse("billing:case_invoices", kwargs={"case_public_id": case.public_id}) in body
+        assert (
+            reverse("documents:case_documents", kwargs={"case_public_id": case.public_id})
+            not in body
+        )
+        assert (
+            reverse("messaging:case_threads", kwargs={"case_public_id": case.public_id}) not in body
+        )
 
 
 class TestWhatHasLeftTheBuilding:
@@ -566,7 +608,9 @@ class TestSignedOutAndDeactivated:
         distinction only matters to somebody who is entitled to it."""
         _case, _ada, _ben, hers, _his = couple_case
 
-        response = client.get(reverse("billing:invoice_detail", kwargs={"pk": hers.pk}))
+        response = client.get(
+            reverse("billing:invoice_detail", kwargs={"public_id": hers.public_id})
+        )
 
         assert response.status_code == 302
         assert "/login/" in response["Location"]

@@ -33,24 +33,36 @@ urlpatterns = [
     path("billing/", views.index, name="index"),
     path("billing/fees/", views.fees, name="fees"),
     path("billing/fees/new/", views.fee_add, name="fee_add"),
-    path("billing/fees/<int:pk>/end/", views.fee_end, name="fee_end"),
-    path("billing/sessions/<int:pk>/", views.session_amend, name="session_amend"),
+    path("billing/fees/<publicid:public_id>/end/", views.fee_end, name="fee_end"),
+    path("billing/sessions/<publicid:public_id>/", views.session_amend, name="session_amend"),
     # --- one case ----------------------------------------------------------
-    path("cases/<int:case_pk>/invoices/", views.case_invoices, name="case_invoices"),
-    path("cases/<int:case_pk>/invoices/new/", views.invoice_create, name="invoice_create"),
+    path("cases/<publicid:case_public_id>/invoices/", views.case_invoices, name="case_invoices"),
+    path(
+        "cases/<publicid:case_public_id>/invoices/new/", views.invoice_create, name="invoice_create"
+    ),
     # --- the payer's pages -------------------------------------------------
     path("invoices/", views.my_invoices, name="my_invoices"),
-    path("invoices/<int:pk>/", views.invoice_detail, name="invoice_detail"),
-    path("invoices/<int:pk>/pay/", views.pay, name="pay"),
+    path("invoices/<publicid:public_id>/", views.invoice_detail, name="invoice_detail"),
+    path("invoices/<publicid:public_id>/pay/", views.pay, name="pay"),
     # --- changing one invoice ---------------------------------------------
-    path("invoices/<int:pk>/lines/new/", views.line_add, name="line_add"),
-    path("invoices/<int:pk>/lines/<int:line_pk>/remove/", views.line_remove, name="line_remove"),
-    path("invoices/<int:pk>/issue/", views.invoice_issue, name="invoice_issue"),
-    path("invoices/<int:pk>/void/", views.invoice_void, name="invoice_void"),
-    path("invoices/<int:pk>/write-off/", views.invoice_write_off, name="invoice_write_off"),
-    path("invoices/<int:pk>/payments/new/", views.payment_record, name="payment_record"),
+    path("invoices/<publicid:public_id>/lines/new/", views.line_add, name="line_add"),
     path(
-        "invoices/<int:pk>/payments/<int:payment_pk>/reverse/",
+        "invoices/<publicid:public_id>/lines/<publicid:line_public_id>/remove/",
+        views.line_remove,
+        name="line_remove",
+    ),
+    path("invoices/<publicid:public_id>/issue/", views.invoice_issue, name="invoice_issue"),
+    path("invoices/<publicid:public_id>/void/", views.invoice_void, name="invoice_void"),
+    path(
+        "invoices/<publicid:public_id>/write-off/",
+        views.invoice_write_off,
+        name="invoice_write_off",
+    ),
+    path(
+        "invoices/<publicid:public_id>/payments/new/", views.payment_record, name="payment_record"
+    ),
+    path(
+        "invoices/<publicid:public_id>/payments/<publicid:payment_public_id>/reverse/",
         views.payment_reverse,
         name="payment_reverse",
     ),

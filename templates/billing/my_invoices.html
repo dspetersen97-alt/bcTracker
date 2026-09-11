@@ -18,7 +18,7 @@
   <tbody>
     {% for invoice in invoices %}
       <tr>
-        <td><a href="{% url 'billing:invoice_detail' invoice.pk %}">{{ invoice.number }}</a>
+        <td><a href="{% url 'billing:invoice_detail' invoice.public_id %}">{{ invoice.number }}</a>
           {% if invoice.memo %}<span class="muted">{{ invoice.memo }}</span>{% endif %}</td>
         <td>{{ invoice.issued_on|default:"—" }}</td>
         <td>{{ invoice.due_on|default:"—" }}

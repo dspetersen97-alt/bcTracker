@@ -87,7 +87,7 @@ def send(couple_case):
 
 
 def downloaded(client, attachment):
-    response = client.get(reverse("messaging:attachment", args=[attachment.pk]))
+    response = client.get(reverse("messaging:attachment", args=[attachment.public_id]))
     if response.status_code != 200:
         return response, b""
     return response, b"".join(response.streaming_content)
@@ -402,7 +402,7 @@ class TestWhoMayOpenAFile:
         _case, ada, _ben = couple_case
         _thread, attachments = send(ada)
 
-        response = client.get(reverse("messaging:attachment", args=[attachments[0].pk]))
+        response = client.get(reverse("messaging:attachment", args=[attachments[0].public_id]))
 
         assert response.status_code == 302
         assert "/login/" in response["Location"]
@@ -496,7 +496,7 @@ class TestTheDownloadItself:
         sign_in(ada)
 
         with pytest.raises(RuntimeError):
-            client.get(reverse("messaging:attachment", args=[attachments[0].pk]))
+            client.get(reverse("messaging:attachment", args=[attachments[0].public_id]))
 
     def test_a_missing_blob_is_a_404_rather_than_a_crash(self, couple_case, send, client, sign_in):
         """What a restore that missed the documents volume looks like."""
@@ -520,7 +520,7 @@ class TestThroughTheBrowser:
         sign_in(ada)
 
         client.post(
-            reverse("messaging:start", kwargs={"case_pk": case.pk}),
+            reverse("messaging:start", kwargs={"case_public_id": case.public_id}),
             {
                 "subject": "A letter",
                 "body": "Please read this before Thursday.",
@@ -538,7 +538,7 @@ class TestThroughTheBrowser:
         sign_in(ada)
 
         client.post(
-            reverse("messaging:start", kwargs={"case_pk": case.pk}),
+            reverse("messaging:start", kwargs={"case_public_id": case.public_id}),
             {
                 "subject": "Three things",
                 "body": "All of these.",
@@ -569,7 +569,7 @@ class TestThroughTheBrowser:
         sign_in(ada)
 
         response = client.post(
-            reverse("messaging:start", kwargs={"case_pk": case.pk}),
+            reverse("messaging:start", kwargs={"case_public_id": case.public_id}),
             {"subject": "A letter", "body": "Please read this.", "files": [a_file()]},
         )
 
@@ -584,7 +584,7 @@ class TestThroughTheBrowser:
         sign_in(ada)
 
         client.post(
-            reverse("messaging:thread", kwargs={"pk": thread.pk}),
+            reverse("messaging:thread", kwargs={"public_id": thread.public_id}),
             {"body": "Here is the page.", "files": [a_file("page.pdf")]},
         )
 
@@ -595,10 +595,10 @@ class TestThroughTheBrowser:
     ):
         _case, ada, ben = couple_case
         thread, attachments = send(ada, uploads=[a_file("letter.pdf")])
-        link = reverse("messaging:attachment", args=[attachments[0].pk])
+        link = reverse("messaging:attachment", args=[attachments[0].public_id])
 
         sign_in(ada)
-        hers = client.get(reverse("messaging:thread", kwargs={"pk": thread.pk}))
+        hers = client.get(reverse("messaging:thread", kwargs={"public_id": thread.public_id}))
         assert link in hers.content.decode()
         assert "letter.pdf" in hers.content.decode()
 
@@ -616,7 +616,7 @@ class TestThroughTheBrowser:
         sign_in(admin_user)
 
         response = client.post(
-            reverse("messaging:thread", kwargs={"pk": thread.pk}),
+            reverse("messaging:thread", kwargs={"public_id": thread.public_id}),
             {"body": "Adding a document to this.", "files": [a_file()]},
         )
 

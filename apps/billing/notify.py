@@ -26,6 +26,7 @@ import logging
 from django.conf import settings
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
+from django.urls import reverse
 
 from apps.core.mail import from_address
 
@@ -60,7 +61,11 @@ def _context(invoice):
         "due_on": invoice.due_on,
         # The invoice page, not a payment link. Paying needs a session, and a URL
         # that took money without one would be a phishing template.
-        "url": f"{settings.SITE_BASE_URL}/invoices/{invoice.pk}/",
+        # reverse() rather than a literal path: an invoice is addressed by its public
+        # id, and a hand-built "/invoices/<pk>/" would have kept working right up to
+        # the point where somebody clicked it. See apps/core/ids.py.
+        "url": settings.SITE_BASE_URL
+        + reverse("billing:invoice_detail", kwargs={"public_id": invoice.public_id}),
         "site_url": settings.SITE_BASE_URL,
         "can_pay_by_card": settings.STRIPE_ENABLED,
     }

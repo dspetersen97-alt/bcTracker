@@ -130,7 +130,7 @@ class TestASessionThatStillOwesASecondFactor:
         objects = scenario(counselor)
         half_signed_in(counselor)
 
-        client.post(reverse("counseling:case_close", kwargs={"pk": objects.case.pk}))
+        client.post(reverse("counseling:case_close", kwargs={"public_id": objects.case.public_id}))
 
         objects.case.refresh_from_db()
         assert objects.case.closed_on is None
@@ -204,7 +204,7 @@ class TestASessionWhoseAccountWasSwitchedOff:
         objects = scenario(counselor)
         switched_off(counselor)
 
-        client.post(reverse("counseling:case_close", kwargs={"pk": objects.case.pk}))
+        client.post(reverse("counseling:case_close", kwargs={"public_id": objects.case.public_id}))
 
         objects.case.refresh_from_db()
         assert objects.case.closed_on is None
@@ -314,7 +314,7 @@ class TestFieldsNobodyWasOffered:
         sign_in(counselee)
 
         client.post(
-            reverse("documents:edit", kwargs={"pk": objects.document.pk}),
+            reverse("documents:edit", kwargs={"public_id": objects.document.public_id}),
             {"title": "Week one", "kind": objects.document.kind, "case": elsewhere.pk},
         )
 
@@ -421,7 +421,7 @@ class TestAnIdThatBelongsSomewhereElse:
         response = client.post(
             reverse(
                 "counseling:case_member_end",
-                kwargs={"pk": theirs.pk, "member_pk": member.pk},
+                kwargs={"public_id": theirs.public_id, "member_public_id": member.public_id},
             )
         )
 
@@ -442,7 +442,7 @@ class TestAnIdThatBelongsSomewhereElse:
         response = client.post(
             reverse(
                 "counseling:case_member_end",
-                kwargs={"pk": mine.pk, "member_pk": member.pk},
+                kwargs={"public_id": mine.public_id, "member_public_id": member.public_id},
             )
         )
 

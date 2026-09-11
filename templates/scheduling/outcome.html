@@ -21,7 +21,7 @@
   {% include "includes/form.html" %}
   <div class="actions">
     <button type="submit">Save</button>
-    <a href="{% url 'scheduling:detail' booking.pk %}">Cancel</a>
+    <a href="{% url 'scheduling:detail' booking.public_id %}">Cancel</a>
   </div>
 </form>
 

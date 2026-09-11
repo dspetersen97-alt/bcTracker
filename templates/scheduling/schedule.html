@@ -3,14 +3,14 @@
 
 {% block content %}
 <h1>Schedule an appointment</h1>
-<p class="role"><a href="{% url 'counseling:case_detail' case.pk %}">{{ case.label }}</a></p>
+<p class="role"><a href="{% url 'counseling:case_detail' case.public_id %}">{{ case.label }}</a></p>
 
 <form method="post" class="stacked">
   {% csrf_token %}
   {% include "includes/form.html" %}
   <div class="actions">
     <button type="submit">Book it</button>
-    <a href="{% url 'scheduling:case_appointments' case.pk %}">Cancel</a>
+    <a href="{% url 'scheduling:case_appointments' case.public_id %}">Cancel</a>
   </div>
 </form>
 

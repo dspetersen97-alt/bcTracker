@@ -25,6 +25,7 @@ import logging
 from django.conf import settings
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
+from django.urls import reverse
 
 from apps.core.mail import from_address
 from apps.messaging.models import NEVER_READ
@@ -86,7 +87,8 @@ def new_message(message) -> None:
                 # and the URL carries a thread id rather than anything readable.
                 # Built from SITE_BASE_URL, never from the request — a spoofed
                 # Host header must not decide where a counselee is sent to sign in.
-                "url": f"{settings.SITE_BASE_URL}/messages/{message.thread_id}/",
+                "url": settings.SITE_BASE_URL
+                + reverse("messaging:thread", kwargs={"public_id": message.thread.public_id}),
                 "site_url": settings.SITE_BASE_URL,
                 "from_staff": message.author.is_ministry_staff,
             },

@@ -57,11 +57,11 @@ from apps.scheduling.models import (
 logger = logging.getLogger(__name__)
 
 
-def visible_case_or_404(request, pk):
-    return get_object_or_404(Case.objects.for_actor(request.user), pk=pk)
+def visible_case_or_404(request, public_id):
+    return get_object_or_404(Case.objects.for_actor(request.user), public_id=public_id)
 
 
-def visible_booking_or_404(request, pk):
+def visible_booking_or_404(request, public_id):
     """The single door onto a Booking.
 
     ``for_actor`` is what makes "one member of a family case cannot see another's
@@ -71,7 +71,7 @@ def visible_booking_or_404(request, pk):
         Booking.objects.for_actor(request.user).select_related(
             "case", "counselor", "counselee", "cancelled_by"
         ),
-        pk=pk,
+        public_id=public_id,
     )
 
 
@@ -88,14 +88,16 @@ def require_perm(request, perm, obj=None):
     return True
 
 
-def own_availability_or_404(request, model, pk):
+def own_availability_or_404(request, model, public_id):
     """A counselor's own office-hours row.
 
     Scoped *and* filtered on the counselor, which is belt and braces: the queryset
     lets a counselee read the rules of a counselor they are booking with, so
     ``for_actor`` alone would let one of them post a delete.
     """
-    return get_object_or_404(model.objects.for_actor(request.user), pk=pk, counselor=request.user)
+    return get_object_or_404(
+        model.objects.for_actor(request.user), public_id=public_id, counselor=request.user
+    )
 
 
 def _parse_date(raw, fallback=None):
@@ -175,8 +177,8 @@ def availability_add(request):
 
 @login_required
 @require_http_methods(["GET", "POST"])
-def availability_edit(request, pk):
-    rule = own_availability_or_404(request, AvailabilityRule, pk)
+def availability_edit(request, public_id):
+    rule = own_availability_or_404(request, AvailabilityRule, public_id)
     require_perm(request, "scheduling.change_availabilityrule", rule)
 
     form = AvailabilityRuleForm(request.POST or None, instance=rule, counselor=request.user)
@@ -201,7 +203,7 @@ def availability_edit(request, pk):
 
 @login_required
 @require_POST
-def availability_delete(request, pk):
+def availability_delete(request, public_id):
     """Remove a weekly window.
 
     A hard delete, unlike almost everything else in this application. Office hours
@@ -209,7 +211,7 @@ def availability_delete(request, pk):
     already booked into a window keep their own rows, so deleting the rule changes
     what is offered tomorrow and rewrites no history.
     """
-    rule = own_availability_or_404(request, AvailabilityRule, pk)
+    rule = own_availability_or_404(request, AvailabilityRule, public_id)
     require_perm(request, "scheduling.delete_availabilityrule", rule)
 
     record(
@@ -252,8 +254,8 @@ def override_add(request):
 
 @login_required
 @require_POST
-def override_delete(request, pk):
-    override = own_availability_or_404(request, AvailabilityOverride, pk)
+def override_delete(request, public_id):
+    override = own_availability_or_404(request, AvailabilityOverride, public_id)
     require_perm(request, "scheduling.manage_own_availability")
 
     record(
@@ -273,7 +275,7 @@ def override_delete(request, pk):
 
 @login_required
 @require_http_methods(["GET", "POST"])
-def book(request, case_pk):
+def book(request, case_public_id):
     """A counselee picking one of the times their counselor is offering.
 
     Two steps, both server-rendered: pick a time from the list, then confirm it
@@ -286,7 +288,7 @@ def book(request, case_pk):
     second time. That is the courteous half of the double-booking defence; the
     exclusion constraint is the half that is actually reliable.
     """
-    case = visible_case_or_404(request, case_pk)
+    case = visible_case_or_404(request, case_public_id)
     require_perm(request, "scheduling.add_booking", case)
 
     # Only a counselee books themselves in. A counselor reaching this page is
@@ -333,7 +335,7 @@ def book(request, case_pk):
                     request,
                     _("Requested. Your counselor will confirm, and you will get an email."),
                 )
-                return redirect("scheduling:detail", pk=booking.pk)
+                return redirect("scheduling:detail", public_id=booking.public_id)
 
     available = services.bookable_slots(
         counselor=case.counselor,
@@ -383,14 +385,14 @@ def _parse_slot(raw):
 
 @login_required
 @require_http_methods(["GET", "POST"])
-def schedule(request, case_pk):
+def schedule(request, case_public_id):
     """A counselor putting an appointment in the diary directly.
 
     Not restricted to the published office hours — an urgent session on a Saturday
     is a real thing, and the hours exist to tell counselees what to ask for rather
     than to overrule the counselor. The clash constraint still applies.
     """
-    case = visible_case_or_404(request, case_pk)
+    case = visible_case_or_404(request, case_public_id)
     require_perm(request, "counseling.change_case", case)
     require_perm(request, "scheduling.add_booking", case)
 
@@ -415,7 +417,7 @@ def schedule(request, case_pk):
             form.add_error(None, str(exc))
         else:
             messages.success(request, _("Booked. Everyone attending has been emailed."))
-            return redirect("scheduling:detail", pk=booking.pk)
+            return redirect("scheduling:detail", public_id=booking.public_id)
 
     return render(request, "scheduling/schedule.html", {"case": case, "form": form})
 
@@ -471,14 +473,14 @@ def appointments(request):
 
 
 @login_required
-def case_appointments(request, case_pk):
+def case_appointments(request, case_public_id):
     """Every appointment on one case that this actor may see.
 
     The route billing uses, which is why it exists separately from the diary: a
     financial administrator working an invoice needs the sessions on one case, and
     nothing here renders a note.
     """
-    case = visible_case_or_404(request, case_pk)
+    case = visible_case_or_404(request, case_public_id)
     require_perm(request, "counseling.view_case", case)
 
     diary = (
@@ -501,8 +503,8 @@ def case_appointments(request, case_pk):
 
 
 @login_required
-def detail(request, pk):
-    booking = visible_booking_or_404(request, pk)
+def detail(request, public_id):
+    booking = visible_booking_or_404(request, public_id)
     require_perm(request, "scheduling.view_booking", booking)
 
     # Decided here rather than in the template, so a template change cannot widen
@@ -546,8 +548,8 @@ def detail(request, pk):
 
 @login_required
 @require_POST
-def confirm(request, pk):
-    booking = visible_booking_or_404(request, pk)
+def confirm(request, public_id):
+    booking = visible_booking_or_404(request, public_id)
     require_perm(request, "scheduling.confirm_booking", booking)
 
     try:
@@ -556,19 +558,19 @@ def confirm(request, pk):
         messages.error(request, str(exc))
     else:
         messages.success(request, _("Confirmed. Everyone attending has been emailed."))
-    return redirect("scheduling:detail", pk=booking.pk)
+    return redirect("scheduling:detail", public_id=booking.public_id)
 
 
 @login_required
 @require_http_methods(["GET", "POST"])
-def cancel(request, pk):
+def cancel(request, public_id):
     """Cancelling, with the notice consequence stated before it is done.
 
     A confirmation step rather than a bare POST button, because on a joint
     appointment cancelling affects other people and because a late cancellation may
     be billable. Being told that afterwards would be a surprise.
     """
-    booking = visible_booking_or_404(request, pk)
+    booking = visible_booking_or_404(request, public_id)
     require_perm(request, "scheduling.cancel_booking", booking)
 
     window = services.BookingWindow(booking.counselor)
@@ -585,7 +587,7 @@ def cancel(request, pk):
             )
         except services.SchedulingError as exc:
             messages.error(request, str(exc))
-            return redirect("scheduling:detail", pk=booking.pk)
+            return redirect("scheduling:detail", public_id=booking.public_id)
         messages.success(request, _("Cancelled. That time is free again."))
         return redirect("scheduling:appointments")
 
@@ -603,14 +605,14 @@ def cancel(request, pk):
 
 @login_required
 @require_http_methods(["GET", "POST"])
-def reschedule(request, pk):
+def reschedule(request, public_id):
     """Move an appointment. Counselor and admin only.
 
     A counselee cancels and books again instead, which puts them back through the
     office hours; rescheduling bypasses them by design, which is why it is not
     theirs to do.
     """
-    booking = visible_booking_or_404(request, pk)
+    booking = visible_booking_or_404(request, public_id)
     require_perm(request, "scheduling.reschedule_booking", booking)
 
     window = services.BookingWindow(booking.counselor)
@@ -645,21 +647,21 @@ def reschedule(request, pk):
             form.add_error(None, str(exc))
         else:
             messages.success(request, _("Moved. Everyone attending has been emailed."))
-            return redirect("scheduling:detail", pk=booking.pk)
+            return redirect("scheduling:detail", public_id=booking.public_id)
 
     return render(request, "scheduling/reschedule.html", {"booking": booking, "form": form})
 
 
 @login_required
 @require_http_methods(["GET", "POST"])
-def outcome(request, pk):
+def outcome(request, public_id):
     """Record what became of a session that has already happened.
 
     Held, or missed. This is the row a v3 invoice is raised from, which is why it
     is a deliberate action rather than something inferred from the clock: an
     appointment nobody closed out should look unfinished, not silently billable.
     """
-    booking = visible_booking_or_404(request, pk)
+    booking = visible_booking_or_404(request, public_id)
     require_perm(request, "scheduling.record_outcome", booking)
 
     initial = {}
@@ -687,14 +689,14 @@ def outcome(request, pk):
             form.add_error(None, str(exc))
         else:
             messages.success(request, _("Recorded."))
-            return redirect("scheduling:detail", pk=booking.pk)
+            return redirect("scheduling:detail", public_id=booking.public_id)
 
     return render(request, "scheduling/outcome.html", {"booking": booking, "form": form})
 
 
 @login_required
 @require_http_methods(["GET", "POST"])
-def note(request, pk):
+def note(request, public_id):
     """The counselor's own note on an appointment, before or after it happens.
 
     ``outcome`` also writes this field, but only for a session that has already
@@ -708,7 +710,7 @@ def note(request, pk):
     asymmetry: correcting the billing record is an administrative act, writing what
     was said in a room you were not in is not.
     """
-    booking = visible_booking_or_404(request, pk)
+    booking = visible_booking_or_404(request, public_id)
     require_perm(request, "scheduling.change_booking_note", booking)
 
     # Bound to the instance for validation, but never ``form.save()``: the service
@@ -724,6 +726,6 @@ def note(request, pk):
             request=request,
         )
         messages.success(request, _("Note saved."))
-        return redirect("scheduling:detail", pk=booking.pk)
+        return redirect("scheduling:detail", public_id=booking.public_id)
 
     return render(request, "scheduling/note.html", {"booking": booking, "form": form})

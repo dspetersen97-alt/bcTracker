@@ -735,7 +735,7 @@ class TestWhatTheEventSays:
         body = sync.event_body(booking, credential=credential)
 
         expected = "https://counseling.example.org" + reverse(
-            "scheduling:detail", kwargs={"pk": booking.pk}
+            "scheduling:detail", kwargs={"public_id": booking.public_id}
         )
         assert expected in body["description"]
         # Nothing else. The link is there so a counselor's route from "10am on my

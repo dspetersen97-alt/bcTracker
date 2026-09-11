@@ -34,6 +34,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils.translation import gettext as _
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
@@ -67,11 +68,11 @@ from apps.counseling.models import Case
 logger = logging.getLogger(__name__)
 
 
-def visible_case_or_404(request, pk):
-    return get_object_or_404(Case.objects.for_actor(request.user), pk=pk)
+def visible_case_or_404(request, public_id):
+    return get_object_or_404(Case.objects.for_actor(request.user), public_id=public_id)
 
 
-def visible_invoice_or_404(request, pk):
+def visible_invoice_or_404(request, public_id):
     """The single door onto an Invoice.
 
     ``for_actor`` is what makes "a spouse cannot see the other's bill" true by
@@ -89,16 +90,16 @@ def visible_invoice_or_404(request, pk):
         Invoice.objects.for_actor(request.user).select_related(
             "case", "case__counselor", "counselee"
         ),
-        pk=pk,
+        public_id=public_id,
     )
 
 
-def visible_session_or_404(request, pk):
+def visible_session_or_404(request, public_id):
     return get_object_or_404(
         SessionRecord.objects.for_actor(request.user).select_related(
             "case", "counselee", "counselor"
         ),
-        pk=pk,
+        public_id=public_id,
     )
 
 
@@ -205,7 +206,7 @@ def fee_add(request):
 
 @login_required
 @require_POST
-def fee_end(request, pk):
+def fee_end(request, public_id):
     """Stop a rate applying, from today.
 
     Ended rather than deleted: invoices were raised against it, and a rate that
@@ -214,7 +215,7 @@ def fee_end(request, pk):
     """
     require_perm(request, "billing.manage_fees")
 
-    fee = get_object_or_404(Fee.objects.for_actor(request.user), pk=pk)
+    fee = get_object_or_404(Fee.objects.for_actor(request.user), public_id=public_id)
     fee.effective_to = org_today()
     if fee.effective_to < fee.effective_from:
         # A rate that was to start next month, withdrawn before it began. Ending it
@@ -238,8 +239,8 @@ def fee_end(request, pk):
 
 @login_required
 @require_http_methods(["GET", "POST"])
-def session_amend(request, pk):
-    session = visible_session_or_404(request, pk)
+def session_amend(request, public_id):
+    session = visible_session_or_404(request, public_id)
     require_perm(request, "billing.change_session", session)
 
     form = SessionAmendForm(request.POST or None, session=session)
@@ -266,14 +267,14 @@ def session_amend(request, pk):
 
 
 @login_required
-def case_invoices(request, case_pk):
+def case_invoices(request, case_public_id):
     """The invoices on one case.
 
     Not branched on the role. A counselee sees the ones addressed to them, a
     counselor the case's, an administrator the same — the scoping layer decides, so
     this view does not have to know which.
     """
-    case = visible_case_or_404(request, case_pk)
+    case = visible_case_or_404(request, case_public_id)
     require_perm(request, "billing.view_case_invoices", case)
 
     invoices = (
@@ -305,8 +306,8 @@ def case_invoices(request, case_pk):
 
 @login_required
 @require_http_methods(["GET", "POST"])
-def invoice_create(request, case_pk):
-    case = visible_case_or_404(request, case_pk)
+def invoice_create(request, case_public_id):
+    case = visible_case_or_404(request, case_public_id)
     require_perm(request, "billing.add_invoice", case)
 
     form = InvoiceCreateForm(request.POST or None, case=case)
@@ -327,7 +328,7 @@ def invoice_create(request, case_pk):
                 request,
                 _("Draft created. Nobody has been told about it yet — send it when it is right."),
             )
-            return redirect("billing:invoice_detail", pk=invoice.pk)
+            return redirect("billing:invoice_detail", public_id=invoice.public_id)
 
     return render(request, "billing/invoice_create.html", {"form": form, "case": case})
 
@@ -360,7 +361,7 @@ def my_invoices(request):
 
 
 @login_required
-def invoice_detail(request, pk):
+def invoice_detail(request, public_id):
     """One invoice, with its lines, its payments, and whatever can be done to it next.
 
     The ``can_*`` flags come from the permission layer rather than from re-reading the
@@ -368,7 +369,7 @@ def invoice_detail(request, pk):
     action. A page that offered "Void" on a paid invoice would be lying to the person
     clicking it.
     """
-    invoice = visible_invoice_or_404(request, pk)
+    invoice = visible_invoice_or_404(request, public_id)
     require_perm(request, "billing.view_invoice", invoice)
 
     record(
@@ -406,7 +407,7 @@ def invoice_detail(request, pk):
 
 @login_required
 @require_POST
-def pay(request, pk):
+def pay(request, public_id):
     """Send the payer to Stripe's hosted page.
 
     POST, not GET, and the reason is not CSRF alone: this creates a payment session at
@@ -417,10 +418,18 @@ def pay(request, pk):
     money arrived, over the webhook, and never because the payer reached the return
     URL — a redirect a browser performs is not evidence of a payment.
     """
-    invoice = visible_invoice_or_404(request, pk)
+    invoice = visible_invoice_or_404(request, public_id)
     require_perm(request, "billing.pay_invoice", invoice)
 
-    detail_url = f"{settings.SITE_BASE_URL}/invoices/{invoice.pk}/"
+    # reverse() rather than a hand-built path: the route's shape is the URLconf's to
+    # decide, and a literal here went stale the moment invoices stopped being keyed by
+    # their primary key. SITE_BASE_URL rather than the request's host because this URL
+    # is handed to Stripe, which will send a payer back to it later — see
+    # apps/core/urls.py's note on why request-derived hosts are not trusted for links
+    # that leave the building.
+    detail_url = settings.SITE_BASE_URL + reverse(
+        "billing:invoice_detail", kwargs={"public_id": invoice.public_id}
+    )
     try:
         url = stripe_client.checkout_url_for(
             invoice,
@@ -441,7 +450,7 @@ def pay(request, pk):
                 "contact the office to pay another way."
             ),
         )
-        return redirect("billing:invoice_detail", pk=invoice.pk)
+        return redirect("billing:invoice_detail", public_id=invoice.public_id)
 
     return redirect(url)
 
@@ -451,15 +460,15 @@ def pay(request, pk):
 
 @login_required
 @require_POST
-def line_add(request, pk):
+def line_add(request, public_id):
     """Put a charge on a draft that did not come from a session."""
-    invoice = visible_invoice_or_404(request, pk)
+    invoice = visible_invoice_or_404(request, public_id)
     require_perm(request, "billing.change_invoice", invoice)
 
     form = InvoiceLineForm(request.POST)
     if not form.is_valid():
         flash.error(request, _("That charge could not be added. Check the amount."))
-        return redirect("billing:invoice_detail", pk=invoice.pk)
+        return redirect("billing:invoice_detail", public_id=invoice.public_id)
 
     try:
         services.add_line(
@@ -473,12 +482,12 @@ def line_add(request, pk):
         flash.error(request, str(exc))
     else:
         flash.success(request, _("Added."))
-    return redirect("billing:invoice_detail", pk=invoice.pk)
+    return redirect("billing:invoice_detail", public_id=invoice.public_id)
 
 
 @login_required
 @require_POST
-def line_remove(request, pk, line_pk):
+def line_remove(request, public_id, line_public_id):
     """Take a charge off a draft.
 
     A real delete, and defensible only because a draft has not been shown to anybody
@@ -486,7 +495,7 @@ def line_remove(request, pk, line_pk):
     than through ``InvoiceLineItem.objects``, so a line id from another invoice is a
     404 rather than a charge removed from somebody else's bill.
     """
-    invoice = visible_invoice_or_404(request, pk)
+    invoice = visible_invoice_or_404(request, public_id)
     require_perm(request, "billing.change_invoice", invoice)
 
     # Through the invoice's own related manager rather than
@@ -494,20 +503,20 @@ def line_remove(request, pk, line_pk):
     # a worse habit: the scoping tripwire in tests/test_role_matrix_attacks.py reads
     # ``<Model>.objects`` in views as unscoped, and it is right to, because that
     # spelling stays valid after somebody deletes the filter.
-    line = get_object_or_404(invoice.lines, pk=line_pk)
+    line = get_object_or_404(invoice.lines, public_id=line_public_id)
     try:
         services.remove_line(line, actor=request.user)
     except services.BillingError as exc:
         flash.error(request, str(exc))
     else:
         flash.success(request, _("Removed."))
-    return redirect("billing:invoice_detail", pk=invoice.pk)
+    return redirect("billing:invoice_detail", public_id=invoice.public_id)
 
 
 @login_required
 @require_POST
-def invoice_issue(request, pk):
-    invoice = visible_invoice_or_404(request, pk)
+def invoice_issue(request, public_id):
+    invoice = visible_invoice_or_404(request, public_id)
     require_perm(request, "billing.issue_invoice", invoice)
 
     try:
@@ -520,19 +529,19 @@ def invoice_issue(request, pk):
             _("Sent. %(who)s has been emailed and can now see it and pay it.")
             % {"who": invoice.counselee.full_name},
         )
-    return redirect("billing:invoice_detail", pk=invoice.pk)
+    return redirect("billing:invoice_detail", public_id=invoice.public_id)
 
 
 @login_required
 @require_http_methods(["GET", "POST"])
-def invoice_void(request, pk):
+def invoice_void(request, public_id):
     """Withdraw an invoice, with a reason.
 
     Its own page rather than a button, because the reason is required and because
     voiding is the action that undoes something a counselee has already been told.
     Confirming beats a one-click mistake.
     """
-    invoice = visible_invoice_or_404(request, pk)
+    invoice = visible_invoice_or_404(request, public_id)
     require_perm(request, "billing.void_invoice", invoice)
 
     form = ReasonForm(request.POST or None)
@@ -551,7 +560,7 @@ def invoice_void(request, pk):
                 request,
                 _("Withdrawn. Its sessions can go on a new invoice."),
             )
-            return redirect("billing:invoice_detail", pk=invoice.pk)
+            return redirect("billing:invoice_detail", public_id=invoice.public_id)
 
     return render(
         request,
@@ -572,7 +581,7 @@ def invoice_void(request, pk):
 
 @login_required
 @require_http_methods(["GET", "POST"])
-def invoice_write_off(request, pk):
+def invoice_write_off(request, public_id):
     """Accept that an invoice will not be paid.
 
     Kept apart from voiding, because the two say different things about the
@@ -580,7 +589,7 @@ def invoice_write_off(request, pk):
     right. A written-off invoice can still be paid, which is why somebody settling up
     a year later is not refused.
     """
-    invoice = visible_invoice_or_404(request, pk)
+    invoice = visible_invoice_or_404(request, public_id)
     require_perm(request, "billing.write_off_invoice", invoice)
 
     form = ReasonForm(request.POST or None)
@@ -596,7 +605,7 @@ def invoice_write_off(request, pk):
             form.add_error(None, str(exc))
         else:
             flash.success(request, _("Written off. It can still be paid if it ever is."))
-            return redirect("billing:invoice_detail", pk=invoice.pk)
+            return redirect("billing:invoice_detail", public_id=invoice.public_id)
 
     return render(
         request,
@@ -616,13 +625,13 @@ def invoice_write_off(request, pk):
 
 @login_required
 @require_http_methods(["GET", "POST"])
-def payment_record(request, pk):
+def payment_record(request, public_id):
     """Money that arrived by cash, check, or transfer.
 
     There is no card option — a card payment is Stripe's to report, and a route that
     let the office claim one would be a route that records money no processor saw.
     """
-    invoice = visible_invoice_or_404(request, pk)
+    invoice = visible_invoice_or_404(request, public_id)
     require_perm(request, "billing.record_payment", invoice)
 
     form = PaymentForm(request.POST or None, invoice=invoice)
@@ -641,24 +650,24 @@ def payment_record(request, pk):
             form.add_error(None, str(exc))
         else:
             flash.success(request, _("Payment recorded."))
-            return redirect("billing:invoice_detail", pk=invoice.pk)
+            return redirect("billing:invoice_detail", public_id=invoice.public_id)
 
     return render(request, "billing/payment_record.html", {"form": form, "invoice": invoice})
 
 
 @login_required
 @require_POST
-def payment_reverse(request, pk, payment_pk):
+def payment_reverse(request, public_id, payment_public_id):
     """A bounced check or a refunded card payment.
 
     Writes a second, negative row rather than editing the first; see ``Payment``.
     """
-    invoice = visible_invoice_or_404(request, pk)
+    invoice = visible_invoice_or_404(request, public_id)
     require_perm(request, "billing.reverse_payment", invoice)
 
     # Through the invoice, for the reason given in ``line_remove``: a payment id from
     # somebody else's bill is a 404 and not a reversal on it.
-    payment = get_object_or_404(invoice.payments, pk=payment_pk)
+    payment = get_object_or_404(invoice.payments, public_id=payment_public_id)
     try:
         services.reverse_payment(
             payment,
@@ -670,7 +679,7 @@ def payment_reverse(request, pk, payment_pk):
         flash.error(request, str(exc))
     else:
         flash.success(request, _("Reversed. Both entries stay on the record."))
-    return redirect("billing:invoice_detail", pk=invoice.pk)
+    return redirect("billing:invoice_detail", public_id=invoice.public_id)
 
 
 # --- Stripe ----------------------------------------------------------------

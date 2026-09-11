@@ -18,6 +18,8 @@ from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from apps.core.ids import PUBLIC_ID_LENGTH, unique_public_id
+
 
 class TimeStampedModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
@@ -25,6 +27,64 @@ class TimeStampedModel(models.Model):
 
     class Meta:
         abstract = True
+
+
+class PublicIdModel(models.Model):
+    """Gives a model an identifier that is safe to put in a URL or an email.
+
+    The primary key stays what it was — a ``bigint`` from a sequence, which is what
+    foreign keys should be. This adds a second identifier, ten random digits, and
+    that is the only one the outside world is shown. ``apps/core/ids.py`` explains
+    why at length; the short version is that a sequential id in a link publishes
+    both a row count and the id of every neighbouring row.
+
+    Filled in on first save rather than by a field ``default``. A callable default
+    would produce a value without consulting the table, so the uniqueness of the
+    column would rest entirely on the constraint — and the one in a few billion
+    time two values collided, the actor would be shown a database error in the
+    middle of booking a session. ``unique_public_id`` checks first, so the
+    constraint is a backstop rather than the mechanism.
+
+    Concrete subclasses need a migration that adds the column, backfills the rows
+    that already exist, and only then makes it unique and non-null; adding a unique
+    non-null column to a populated table in one step cannot work. Every app that
+    uses this has one, named ``*_public_id``.
+    """
+
+    public_id = models.CharField(
+        max_length=PUBLIC_ID_LENGTH,
+        unique=True,
+        editable=False,
+        verbose_name=_("reference"),
+    )
+
+    class Meta:
+        abstract = True
+
+    def save(self, *args, **kwargs):
+        if not self.public_id:
+            self.ensure_public_id()
+            # A caller that named the fields it was updating cannot have meant to
+            # skip this one, because a row without a public id has no URL and is
+            # unreachable. Widening update_fields is safer than writing a row whose
+            # new column stays empty.
+            update_fields = kwargs.get("update_fields")
+            if update_fields is not None:
+                kwargs["update_fields"] = [*update_fields, "public_id"]
+        return super().save(*args, **kwargs)
+
+    def ensure_public_id(self) -> str:
+        """This row's public id, assigning one if it does not have it yet.
+
+        Separate from ``save`` because one model needs the value *before* the insert
+        for a reason of its own: an invoice's printed reference is its public id with
+        a prefix, so ``Invoice.save`` asks for the id, formats the number from it, and
+        then lets the ordinary save path run. Without this it would either have to
+        duplicate the assignment or carry a second unrelated random number.
+        """
+        if not self.public_id:
+            self.public_id = unique_public_id(type(self))
+        return self.public_id
 
 
 class SoftDeleteQuerySet(models.QuerySet):

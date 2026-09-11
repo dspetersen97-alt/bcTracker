@@ -3,7 +3,7 @@
 
 {% block content %}
 <h1>Invoices</h1>
-<p class="role"><a href="{% url 'counseling:case_detail' case.pk %}">{{ case.label }}</a></p>
+<p class="role"><a href="{% url 'counseling:case_detail' case.public_id %}">{{ case.label }}</a></p>
 
 {% comment %} One page for every role that can reach it, and what differs is what is in the
    tables — Invoice.objects.for_actor decides, not this template. On a shared case a
@@ -20,7 +20,7 @@
   <tbody>
     {% for invoice in invoices %}
       <tr>
-        <td><a href="{% url 'billing:invoice_detail' invoice.pk %}">{{ invoice.number }}</a></td>
+        <td><a href="{% url 'billing:invoice_detail' invoice.public_id %}">{{ invoice.number }}</a></td>
         <td>{{ invoice.counselee.full_name }}</td>
         <td>{{ invoice.issued_on|default:"—" }}</td>
         <td>{{ invoice.get_status_display }}
@@ -56,7 +56,7 @@
 
 {% if can_raise %}
   <div class="actions">
-    <a class="button" href="{% url 'billing:invoice_create' case.pk %}">Raise an invoice</a>
+    <a class="button" href="{% url 'billing:invoice_create' case.public_id %}">Raise an invoice</a>
     <a href="{% url 'billing:index' %}">Back to billing</a>
   </div>
 {% endif %}

@@ -79,7 +79,9 @@ class TestEveryResponseCarriesThePolicy:
         renders one inline."""
         world = scenario(counselor)
 
-        response = sign_in(counselor).get(reverse("documents:download", args=[world.document.pk]))
+        response = sign_in(counselor).get(
+            reverse("documents:download", args=[world.document.public_id])
+        )
 
         assert response.status_code == 200
         assert "Content-Security-Policy" in response

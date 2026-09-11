@@ -22,7 +22,7 @@
    only for counselees; see the view. {% endcomment %}
 {% for case in bookable %}
   <div class="actions">
-    <a class="button" href="{% url 'scheduling:book' case.pk %}">Book an appointment</a>
+    <a class="button" href="{% url 'scheduling:book' case.public_id %}">Book an appointment</a>
     <span class="muted">with {{ case.counselor.full_name }}{% if bookable|length > 1 %} — {{ case.label }}{% endif %}</span>
   </div>
 {% endfor %}
@@ -41,7 +41,7 @@
   <tbody>
     {% for booking in upcoming %}
       <tr>
-        <td><a href="{% url 'scheduling:detail' booking.pk %}">{{ booking.starts_at|date:"D j M Y, g:i a" }}</a></td>
+        <td><a href="{% url 'scheduling:detail' booking.public_id %}">{{ booking.starts_at|date:"D j M Y, g:i a" }}</a></td>
         {% comment %} Not counselee.full_name: on a joint appointment that names another member
            of the case. {% endcomment %}
         <td>{% if is_counselor %}{{ booking|attendee_label:request.user }}{% else %}{{ booking.counselor.full_name }}{% endif %}</td>
@@ -50,7 +50,7 @@
         <td class="status status-{{ booking.status }}">{{ booking.get_status_display }}</td>
         <td>
           {% if booking.case_id in uploadable_cases %}
-            <a href="{% url 'documents:upload' booking.case_id %}?booking={{ booking.pk }}">Upload document</a>
+            <a href="{% url 'documents:upload' booking.case.public_id %}?booking={{ booking.public_id }}">Upload document</a>
           {% endif %}
         </td>
       </tr>
@@ -68,7 +68,7 @@
   <tbody>
     {% for booking in past %}
       <tr>
-        <td><a href="{% url 'scheduling:detail' booking.pk %}">{{ booking.starts_at|date:"D j M Y, g:i a" }}</a></td>
+        <td><a href="{% url 'scheduling:detail' booking.public_id %}">{{ booking.starts_at|date:"D j M Y, g:i a" }}</a></td>
         <td>{% if is_counselor %}{{ booking|attendee_label:request.user }}{% else %}{{ booking.counselor.full_name }}{% endif %}</td>
         <td>{{ booking.case.label }}</td>
         <td class="status status-{{ booking.status }}">
@@ -79,7 +79,7 @@
            after the meeting more often than before it. {% endcomment %}
         <td>
           {% if booking.case_id in uploadable_cases %}
-            <a href="{% url 'documents:upload' booking.case_id %}?booking={{ booking.pk }}">Upload document</a>
+            <a href="{% url 'documents:upload' booking.case.public_id %}?booking={{ booking.public_id }}">Upload document</a>
           {% endif %}
         </td>
       </tr>

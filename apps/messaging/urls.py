@@ -23,10 +23,10 @@ app_name = "messaging"
 
 urlpatterns = [
     path("messages/", views.index, name="index"),
-    path("cases/<int:case_pk>/messages/", views.case_threads, name="case_threads"),
-    path("cases/<int:case_pk>/messages/new/", views.start, name="start"),
-    path("messages/attachments/<int:pk>/", views.attachment, name="attachment"),
-    path("messages/<int:pk>/", views.thread, name="thread"),
-    path("messages/<int:pk>/close/", views.close, name="close"),
-    path("messages/<int:pk>/reopen/", views.reopen, name="reopen"),
+    path("cases/<publicid:case_public_id>/messages/", views.case_threads, name="case_threads"),
+    path("cases/<publicid:case_public_id>/messages/new/", views.start, name="start"),
+    path("messages/attachments/<publicid:public_id>/", views.attachment, name="attachment"),
+    path("messages/<publicid:public_id>/", views.thread, name="thread"),
+    path("messages/<publicid:public_id>/close/", views.close, name="close"),
+    path("messages/<publicid:public_id>/reopen/", views.reopen, name="reopen"),
 ]

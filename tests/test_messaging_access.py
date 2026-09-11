@@ -76,7 +76,7 @@ class TestSpousesOnOneCase:
         _case, ada, _ben, _hers, his = couple_case
         sign_in(ada)
 
-        response = client.get(reverse("messaging:thread", kwargs={"pk": his.pk}))
+        response = client.get(reverse("messaging:thread", kwargs={"public_id": his.public_id}))
 
         assert response.status_code == 404
 
@@ -92,7 +92,9 @@ class TestSpousesOnOneCase:
         case, ada, _ben, hers, his = couple_case
         sign_in(ada)
 
-        response = client.get(reverse("messaging:case_threads", kwargs={"case_pk": case.pk}))
+        response = client.get(
+            reverse("messaging:case_threads", kwargs={"case_public_id": case.public_id})
+        )
 
         assert list(response.context["threads"]) == [hers]
         assert his.subject not in response.content.decode()
@@ -109,11 +111,11 @@ class TestSpousesOnOneCase:
         sign_in(ada)
 
         body = client.get(
-            reverse("messaging:case_threads", kwargs={"case_pk": case.pk})
+            reverse("messaging:case_threads", kwargs={"case_public_id": case.public_id})
         ).content.decode()
 
-        assert reverse("messaging:thread", kwargs={"pk": hers.pk}) in body
-        assert reverse("messaging:thread", kwargs={"pk": his.pk}) not in body
+        assert reverse("messaging:thread", kwargs={"public_id": hers.public_id}) in body
+        assert reverse("messaging:thread", kwargs={"public_id": his.public_id}) not in body
         assert his.subject not in body
 
     def test_neither_can_reply_into_the_others_conversation(self, client, sign_in, couple_case):
@@ -121,7 +123,8 @@ class TestSpousesOnOneCase:
         sign_in(ada)
 
         response = client.post(
-            reverse("messaging:thread", kwargs={"pk": his.pk}), {"body": "I saw what you wrote."}
+            reverse("messaging:thread", kwargs={"public_id": his.public_id}),
+            {"body": "I saw what you wrote."},
         )
 
         assert response.status_code == 404
@@ -141,7 +144,7 @@ class TestAnotherCounselorsCase:
         _case, _ada, _ben, hers, _his = couple_case
         sign_in(other_counselor)
 
-        response = client.get(reverse("messaging:thread", kwargs={"pk": hers.pk}))
+        response = client.get(reverse("messaging:thread", kwargs={"public_id": hers.public_id}))
 
         assert response.status_code == 404
 
@@ -151,7 +154,9 @@ class TestAnotherCounselorsCase:
         case, *_ = couple_case
         sign_in(other_counselor)
 
-        response = client.get(reverse("messaging:case_threads", kwargs={"case_pk": case.pk}))
+        response = client.get(
+            reverse("messaging:case_threads", kwargs={"case_public_id": case.public_id})
+        )
 
         assert response.status_code == 404
 
@@ -179,7 +184,9 @@ class TestFinancialAdmin:
 
         assert Case.objects.for_actor(financial_admin).filter(pk=case.pk).exists()
         assert (
-            client.get(reverse("messaging:case_threads", kwargs={"case_pk": case.pk})).status_code
+            client.get(
+                reverse("messaging:case_threads", kwargs={"case_public_id": case.public_id})
+            ).status_code
             == 403
         )
 
@@ -190,10 +197,12 @@ class TestFinancialAdmin:
         sign_in(financial_admin)
 
         body = client.get(
-            reverse("counseling:case_detail", kwargs={"pk": case.pk})
+            reverse("counseling:case_detail", kwargs={"public_id": case.public_id})
         ).content.decode()
 
-        assert reverse("messaging:case_threads", kwargs={"case_pk": case.pk}) not in body
+        assert (
+            reverse("messaging:case_threads", kwargs={"case_public_id": case.public_id}) not in body
+        )
 
     def test_the_refusal_is_audited(self, client, sign_in, financial_admin):
         sign_in(financial_admin)
@@ -230,7 +239,7 @@ class TestAnAdministrator:
         _case, _ada, _ben, hers, _his = couple_case
         sign_in(admin_user)
 
-        response = client.get(reverse("messaging:thread", kwargs={"pk": hers.pk}))
+        response = client.get(reverse("messaging:thread", kwargs={"public_id": hers.public_id}))
 
         assert response.status_code == 200
         assert "I am struggling." in response.content.decode()
@@ -239,7 +248,7 @@ class TestAnAdministrator:
         _case, _ada, _ben, hers, _his = couple_case
         sign_in(admin_user)
 
-        client.get(reverse("messaging:thread", kwargs={"pk": hers.pk}))
+        client.get(reverse("messaging:thread", kwargs={"public_id": hers.public_id}))
 
         assert AuditEvent.objects.filter(
             verb=AuditVerb.THREAD_VIEWED, actor=admin_user, target_id=str(hers.pk)
@@ -249,7 +258,7 @@ class TestAnAdministrator:
         _case, _ada, _ben, hers, _his = couple_case
         sign_in(admin_user)
 
-        response = client.get(reverse("messaging:thread", kwargs={"pk": hers.pk}))
+        response = client.get(reverse("messaging:thread", kwargs={"public_id": hers.public_id}))
 
         assert response.context["can_reply"] is False
 
@@ -259,7 +268,7 @@ class TestAnAdministrator:
         sign_in(admin_user)
 
         response = client.post(
-            reverse("messaging:thread", kwargs={"pk": hers.pk}),
+            reverse("messaging:thread", kwargs={"public_id": hers.public_id}),
             {"body": "The office needs you to reconsider."},
         )
 
@@ -271,7 +280,7 @@ class TestAnAdministrator:
         sign_in(admin_user)
 
         response = client.post(
-            reverse("messaging:start", kwargs={"case_pk": case.pk}),
+            reverse("messaging:start", kwargs={"case_public_id": case.public_id}),
             {"subject": "From the office", "body": "Please call us."},
         )
 
@@ -282,7 +291,7 @@ class TestAnAdministrator:
         _case, _ada, _ben, hers, _his = couple_case
         sign_in(admin_user)
 
-        response = client.post(reverse("messaging:close", kwargs={"pk": hers.pk}))
+        response = client.post(reverse("messaging:close", kwargs={"public_id": hers.public_id}))
 
         assert response.status_code == 403
         hers.refresh_from_db()
@@ -300,7 +309,7 @@ class TestAnAdministrator:
         _case, _ada, _ben, hers, _his = couple_case
         sign_in(admin_user)
 
-        client.get(reverse("messaging:thread", kwargs={"pk": hers.pk}))
+        client.get(reverse("messaging:thread", kwargs={"public_id": hers.public_id}))
 
         assert not hers.participants.filter(user=admin_user).exists()
         assert hers.participants.count() == 2
@@ -332,7 +341,8 @@ class TestACounseleeWhoseMembershipEnded:
         sign_in(ada)
 
         response = client.post(
-            reverse("messaging:thread", kwargs={"pk": hers.pk}), {"body": "One last thing."}
+            reverse("messaging:thread", kwargs={"public_id": hers.public_id}),
+            {"body": "One last thing."},
         )
 
         assert response.status_code == 404
@@ -393,9 +403,9 @@ class TestAnonymous:
 
         for url in (
             reverse("messaging:index"),
-            reverse("messaging:case_threads", kwargs={"case_pk": case.pk}),
-            reverse("messaging:start", kwargs={"case_pk": case.pk}),
-            reverse("messaging:thread", kwargs={"pk": hers.pk}),
+            reverse("messaging:case_threads", kwargs={"case_public_id": case.public_id}),
+            reverse("messaging:start", kwargs={"case_public_id": case.public_id}),
+            reverse("messaging:thread", kwargs={"public_id": hers.public_id}),
         ):
             response = client.get(url)
             assert response.status_code == 302, url
@@ -406,7 +416,7 @@ class TestAnonymous:
         mail.outbox.clear()
 
         client.post(
-            reverse("messaging:start", kwargs={"case_pk": case.pk}),
+            reverse("messaging:start", kwargs={"case_public_id": case.public_id}),
             {"subject": "Hello", "body": "Something."},
         )
 

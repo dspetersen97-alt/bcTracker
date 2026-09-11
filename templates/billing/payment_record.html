@@ -5,7 +5,7 @@
 <div class="card">
   <h1>Record a payment</h1>
   <p class="role">Invoice
-    <a href="{% url 'billing:invoice_detail' invoice.pk %}">{{ invoice.number }}</a> ·
+    <a href="{% url 'billing:invoice_detail' invoice.public_id %}">{{ invoice.number }}</a> ·
     {{ invoice.counselee.full_name }}</p>
 
   <dl class="detail-list">
@@ -18,7 +18,7 @@
     {% csrf_token %}
     {% include "includes/form.html" %}
     <button type="submit">Record it</button>
-    <a href="{% url 'billing:invoice_detail' invoice.pk %}">Cancel</a>
+    <a href="{% url 'billing:invoice_detail' invoice.public_id %}">Cancel</a>
   </form>
 
   {% comment %} Said on the page as well as enforced in PaymentForm, which leaves CARD out

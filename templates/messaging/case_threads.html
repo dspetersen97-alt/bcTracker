@@ -20,7 +20,7 @@
     {% for thread in threads %}
       <tr>
         <td>
-          <a href="{% url 'messaging:thread' thread.pk %}">{{ thread.subject }}</a>
+          <a href="{% url 'messaging:thread' thread.public_id %}">{{ thread.subject }}</a>
           {% if not thread.is_open %}<span class="badge">closed</span>{% endif %}
         </td>
         {% comment %} Started by, not the participant list: naming everyone in the row would
@@ -42,8 +42,8 @@
 
 <div class="actions">
   {% if can_start %}
-    <a class="button" href="{% url 'messaging:start' case.pk %}">Start a conversation</a>
+    <a class="button" href="{% url 'messaging:start' case.public_id %}">Start a conversation</a>
   {% endif %}
-  <a class="button" href="{% url 'counseling:case_detail' case.pk %}">Back to the case</a>
+  <a class="button" href="{% url 'counseling:case_detail' case.public_id %}">Back to the case</a>
 </div>
 {% endblock %}

@@ -27,7 +27,7 @@
             <td>{{ session.get_kind_display }}</td>
             <td class="muted">{{ session.waived_reason }}</td>
             <td class="row-actions">
-              <a href="{% url 'billing:session_amend' session.pk %}">Set a fee</a>
+              <a href="{% url 'billing:session_amend' session.public_id %}">Set a fee</a>
             </td>
           </tr>
         {% endfor %}
@@ -50,7 +50,7 @@
           <tr>
             <td>{{ session.occurred_on }}</td>
             <td>{{ session.get_kind_display }}
-              <a class="muted" href="{% url 'billing:session_amend' session.pk %}">correct</a></td>
+              <a class="muted" href="{% url 'billing:session_amend' session.public_id %}">correct</a></td>
             <td class="amount">{{ session.display_fee }}</td>
           </tr>
         {% endfor %}
@@ -61,8 +61,8 @@
       </tbody>
     </table>
     <div class="actions">
-      <a class="button" href="{% url 'billing:invoice_create' group.case.pk %}">Raise an invoice</a>
-      <a href="{% url 'billing:case_invoices' group.case.pk %}">This case's invoices</a>
+      <a class="button" href="{% url 'billing:invoice_create' group.case.public_id %}">Raise an invoice</a>
+      <a href="{% url 'billing:case_invoices' group.case.public_id %}">This case's invoices</a>
     </div>
   </div>
 {% empty %}
@@ -77,7 +77,7 @@
   <tbody>
     {% for invoice in outstanding %}
       <tr>
-        <td><a href="{% url 'billing:invoice_detail' invoice.pk %}">{{ invoice.number }}</a></td>
+        <td><a href="{% url 'billing:invoice_detail' invoice.public_id %}">{{ invoice.number }}</a></td>
         <td>{{ invoice.counselee.full_name }}</td>
         <td>{{ invoice.case.label }}</td>
         <td>{{ invoice.due_on }}
