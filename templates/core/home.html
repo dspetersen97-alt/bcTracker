@@ -8,6 +8,42 @@
     also in the menu, at any time, from any page.</p>
 </div>
 
+{% comment %} Directly under the welcome and larger than anything else on the page, because for a
+   counselee this is the page's answer to the only question they came with. Set for
+   counselees alone — see apps/core/views.py::_next_session_for.
+
+   A requested-but-unconfirmed appointment appears here too, marked as such. Hiding it
+   until the counselor agrees would mean somebody who booked ten seconds ago is told
+   nothing is booked, and would go and book it again. {% endcomment %}
+{% if next_session %}
+  <div class="card next-session">
+    <h2>Your next session</h2>
+    <p class="next-session-when">
+      <a href="{% url 'scheduling:detail' next_session.public_id %}">{{ next_session.starts_at|date:"l j F" }}
+        at {{ next_session.starts_at|time:"g:i a" }}</a>
+    </p>
+    <p class="muted">
+      With {{ next_session.counselor.full_name }}, {{ next_session.duration_minutes }} minutes.
+      {% if next_session.status == 'requested' %}Waiting for them to confirm the time.{% endif %}
+    </p>
+    {% comment %} The way in, repeated here rather than only on the appointment page: somebody
+       opening this five minutes beforehand should not have to navigate to join. Same
+       attributes and the same reasons as templates/scheduling/detail.html. {% endcomment %}
+    {% if next_session.meeting_url %}
+      <p class="join">
+        <a class="button" href="{{ next_session.meeting_url }}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Join meeting</a>
+        <span class="muted">This one is online.</span>
+      </p>
+    {% endif %}
+  </div>
+{% elif user.role == 'counselee' %}
+  <div class="card next-session">
+    <h2>Nothing booked yet</h2>
+    <p class="muted">When you are ready, your case page has the times your counselor has open.</p>
+    <div class="actions"><a class="button" href="{% url 'counseling:my_cases' %}">Book an appointment</a></div>
+  </div>
+{% endif %}
+
 {% if mail_warning %}
   {% comment %} Shown only to whoever can fix it — see the note in apps/core/views.py.
      It sits above the buttons because an install that cannot send mail cannot

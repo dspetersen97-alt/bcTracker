@@ -835,6 +835,87 @@ def _validate(booking) -> None:
         raise NotBookable(" ".join(str(message) for message in exc.messages)) from exc
 
 
+# --- what happened last, what happens next --------------------------------
+
+#: A past appointment that was cancelled is not a session that took place, so it is
+#: never what "last session" means. Everything else that is in the past did happen,
+#: or was supposed to: a confirmed one whose outcome the counselor has not got round
+#: to recording, a completed one, and a no-show, which is a fact about the last time
+#: contact was arranged and is worth surfacing rather than skipping over.
+HAPPENED_STATUSES = (
+    BookingStatus.CONFIRMED,
+    BookingStatus.COMPLETED,
+    BookingStatus.NO_SHOW,
+)
+
+
+def next_appointment(*, actor, case=None, now=None):
+    """The soonest appointment ``actor`` may see, or None.
+
+    Scoped through ``for_actor``, which is what makes this safe to call from a
+    dashboard: a counselee asking for their next session gets their own and any
+    whole-case one, never a sibling's individual appointment.
+
+    Requested-but-unconfirmed appointments count. To a counselee the time they
+    asked for *is* the next thing in the diary, and hiding it until a counselor
+    confirms would make the page say "nothing booked" the moment after they booked
+    something. Templates show the status alongside so the difference is visible.
+    """
+    bookings = Booking.objects.for_actor(actor).active().upcoming(now=now)
+    if case is not None:
+        bookings = bookings.filter(case=case)
+    return bookings.select_related("case", "counselor", "counselee").order_by("slot").first()
+
+
+def last_appointment(*, actor, case=None, now=None):
+    """The most recent appointment that took place, or None. See ``HAPPENED_STATUSES``."""
+    bookings = Booking.objects.for_actor(actor).filter(status__in=HAPPENED_STATUSES).past(now=now)
+    if case is not None:
+        bookings = bookings.filter(case=case)
+    return bookings.select_related("case", "counselor", "counselee").order_by("-slot").first()
+
+
+def attach_sessions(cases, *, actor, now=None):
+    """Hang ``last_session`` and ``next_session`` on every case in ``cases``.
+
+    Two queries for the whole caseload rather than two per case. A counselor with
+    thirty cases would otherwise make sixty round trips to render one table, and
+    the per-case version is the kind of thing that looks fine on the developer's
+    four rows and is slow on the only machine that matters.
+
+    ``cases`` has to be a list, not a queryset, because the attributes are set on
+    the instances the caller goes on to render — re-evaluating a queryset would
+    build fresh objects without them. The caller is already materialising the list
+    to split active from closed, so this costs nothing.
+
+    Ordering does the bucketing: walking the appointments furthest-out first and
+    overwriting means each case ends up holding the nearest one. That is cheaper
+    than a window function and, more to the point, readable.
+    """
+    by_id = {case.pk: case for case in cases}
+    for case in cases:
+        case.last_session = None
+        case.next_session = None
+    if not by_id:
+        return cases
+
+    scoped = Booking.objects.for_actor(actor).filter(case_id__in=by_id)
+    upcoming = scoped.active().upcoming(now=now).select_related("counselee").order_by("-slot")
+    for booking in upcoming:
+        by_id[booking.case_id].next_session = booking
+
+    happened = (
+        scoped.filter(status__in=HAPPENED_STATUSES)
+        .past(now=now)
+        .select_related("counselee")
+        .order_by("slot")
+    )
+    for booking in happened:
+        by_id[booking.case_id].last_session = booking
+
+    return cases
+
+
 # --- reminders ------------------------------------------------------------
 
 

@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 {% block title %}My caseload — bcTracker{% endblock %}
+{# Five columns do not fit a reading measure. See main.wide in the stylesheet. #}
+{% block main_class %}wide{% endblock %}
 
 {% block content %}
 <h1>My caseload</h1>
@@ -15,7 +17,11 @@
 <h2>Active cases</h2>
 {% if active_cases %}
   <table class="table">
-    <thead><tr><th>Case</th><th>Counselees</th><th>Opened</th></tr></thead>
+    {% comment %} Last and next session are here rather than only on the case page because
+       this table is the page a counselor starts the week on, and "who have I not seen for a
+       month" is the question it exists to answer. Both are set by
+       apps/scheduling/services.py::attach_sessions, in two queries for the whole table. {% endcomment %}
+    <thead><tr><th>Case</th><th>Counselees</th><th>Last session</th><th>Next session</th><th>Opened</th></tr></thead>
     <tbody>
       {% for case in active_cases %}
         <tr>
@@ -27,6 +33,8 @@
           <td>
             {% for member in case.members.all %}{% if not member.ended_on %}<a href="{% url 'counseling:counselee_detail' member.counselee.public_id %}">{{ member.counselee.full_name }}</a>{% if not forloop.last %}, {% endif %}{% endif %}{% empty %}<span class="muted">Nobody added yet</span>{% endfor %}
           </td>
+          <td class="session-cell">{% include "includes/session_link.html" with session=case.last_session blank="Not met yet" %}</td>
+          <td class="session-cell">{% include "includes/session_link.html" with session=case.next_session blank="Nothing booked" %}</td>
           <td>{{ case.opened_on }}</td>
         </tr>
       {% endfor %}

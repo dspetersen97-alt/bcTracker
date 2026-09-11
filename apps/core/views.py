@@ -1,10 +1,13 @@
 """
 The home page, the deployment's own settings, and the operational probe.
 
-Nothing here reads counselee data. The home page shows the signed-in person's own
-name and the links their role has; the settings page is the ministry's mail
-configuration. That is deliberate — the site root is the one page every role
-lands on, so it is the page where a mistake would be seen by everybody at once.
+The only counseling data on the home page is the signed-in person's own next
+appointment, fetched through ``Booking.objects.for_actor`` like everything else.
+Otherwise this page shows their name and the links their role has, and the settings
+page is the ministry's mail configuration. Keeping it that thin is deliberate: the
+site root is the one page every role lands on, so it is the page where a mistake
+would be seen by everybody at once, and anything added here has to be something the
+actor is unambiguously entitled to see.
 """
 
 import logging
@@ -19,6 +22,7 @@ from django.utils.translation import gettext as _
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods, require_POST
 
+from apps.accounts.models import Role
 from apps.audit.models import AuditVerb
 from apps.audit.services import record
 from apps.core import mail
@@ -69,6 +73,9 @@ def home(request):
     The mail warning is shown only to whoever can act on it. A counselee being
     told the ministry's SMTP is misconfigured learns nothing they can use and
     something about the ministry they did not need to know.
+
+    ``next_session`` is the one piece of counseling data this page carries, and it
+    is the signed-in person's own appointment — see ``_next_session_for``.
     """
     can_configure = request.user.has_perm("core.manage_site_settings")
     return render(
@@ -77,8 +84,31 @@ def home(request):
         {
             "mail_warning": mail.unconfigured_reason() if can_configure else "",
             "can_configure_mail": can_configure,
+            "next_session": _next_session_for(request.user),
         },
     )
+
+
+def _next_session_for(user):
+    """A counselee's next appointment, for the block at the top of their home page.
+
+    Counselees only, and not because the query would fail for anyone else — it is
+    scoped by actor and would work for all four roles. It is that "your next
+    session" is the whole of what a counselee comes to this page for, whereas a
+    counselor's next appointment is one row of a caseload they are about to open
+    anyway, and putting it above their own dashboard link would be answering a
+    question they did not ask.
+
+    Imported here rather than at module scope: this module is the one every role
+    lands on, and apps.scheduling.services reaches into counseling and audit. A
+    top-level import would tie the site root's importability to that whole chain.
+    """
+    if user.role != Role.COUNSELEE:
+        return None
+
+    from apps.scheduling import services as scheduling_services
+
+    return scheduling_services.next_appointment(actor=user)
 
 
 @login_required

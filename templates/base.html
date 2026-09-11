@@ -75,7 +75,11 @@
         </ul>
       {% endif %}
 
-      <main id="main">
+      {% comment %} main is held to a reading measure by default, because most pages here are
+         prose and a form. A page whose content is a table wide enough to need the room
+         overrides ``main_class`` with "wide" rather than every page being given the width
+         and most of them wasting it. {% endcomment %}
+      <main id="main" class="{% block main_class %}{% endblock %}">
         {% block content %}{% endblock %}
       </main>
 

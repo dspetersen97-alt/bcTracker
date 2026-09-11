@@ -50,6 +50,7 @@ from apps.counseling.models import (
     CounselorProfile,
 )
 from apps.documents.models import Document, Visibility
+from apps.scheduling import services as scheduling_services
 from apps.scheduling.models import Attendance, Booking
 
 logger = logging.getLogger(__name__)
@@ -120,11 +121,17 @@ def counselor_dashboard(request):
         .prefetch_related("members__counselee")
         .annotate(member_count=Count("members", filter=Q(members__ended_on__isnull=True)))
     )
+    active_cases = [c for c in cases if c.status == CaseStatus.ACTIVE]
+    # Only the active ones: "when did I last see them, when do I see them next" is a
+    # question about a case still being counseled, and the closed cases below are
+    # rendered as a bare list. Scoped through the same actor, so the two extra
+    # queries obey the same visibility rule as the list they decorate.
+    scheduling_services.attach_sessions(active_cases, actor=request.user)
     return render(
         request,
         "counseling/counselor_dashboard.html",
         {
-            "active_cases": [c for c in cases if c.status == CaseStatus.ACTIVE],
+            "active_cases": active_cases,
             "other_cases": [c for c in cases if c.status != CaseStatus.ACTIVE],
             "profile": CounselorProfile.objects.filter(user=request.user).first(),
         },

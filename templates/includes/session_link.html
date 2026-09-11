@@ -1,0 +1,23 @@
+{% comment %} One appointment, as small as it goes: a date that links to it, the time, and the
+   one thing that qualifies it. Used for the two columns on a counselor's caseload and for
+   the block at the top of a counselee's home page, so that all three agree on what a
+   session reference looks like.
+
+   The status is rendered only when it is not the unremarkable one. A column with
+   "confirmed" against every row is noise a reader learns to skip — and having learned to
+   skip it, does not see the "did not attend" halfway down. Cancelled appointments never
+   reach here at all: apps/scheduling/services.py::HAPPENED_STATUSES leaves them out,
+   because a cancelled session is not a session that happened.
+
+   ``blank`` is passed in rather than defaulted to a dash, because "—" is read aloud as
+   "em dash" and the two callers mean different things by having nothing to show. Times
+   are rendered in the viewer's own timezone by apps/core/middleware.py. {% endcomment %}
+{% if session %}
+  <a href="{% url 'scheduling:detail' session.public_id %}">{{ session.starts_at|date:"j M Y" }}</a>
+  <span class="muted">{{ session.starts_at|time:"g:i a" }}</span>
+  {% if session.status != 'confirmed' and session.status != 'completed' %}
+    <span class="status status-{{ session.status }}">{{ session.get_status_display|lower }}</span>
+  {% endif %}
+{% else %}
+  <span class="muted">{{ blank|default:"Nothing yet" }}</span>
+{% endif %}

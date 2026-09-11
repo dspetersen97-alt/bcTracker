@@ -209,6 +209,12 @@ main {
   padding: 1.5rem 1.25rem 3rem;
 }
 
+/* For a page whose content is a table with more columns than a reading measure can
+   hold — the caseload, with last and next session on it. Still a maximum rather than
+   100%: a table stretched across a wide monitor puts a case label and its dates so
+   far apart that the eye loses the row between them. */
+main.wide { max-width: 68rem; }
+
 /* On a phone there is no room for both, so the sidebar overlays the content
    instead of sitting beside it — and it starts collapsed, which is what the
    unchecked-is-expanded default cannot express. Hence the reversed rules. */
@@ -478,6 +484,12 @@ button.quiet:hover,
 /* Table actions are secondary to the row's content, so they stay as text. */
 .table .link-button { font-size: 0.88rem; }
 
+/* The last/next session columns on a caseload. The time must not be orphaned onto a
+   line of its own away from its date, and the column is given a floor so eight rows
+   of dates do not each pick a different width. */
+.session-cell { min-width: 8.5rem; }
+.session-cell .muted { white-space: nowrap; }
+
 .detail-list {
   display: grid;
   grid-template-columns: max-content 1fr;
@@ -503,6 +515,37 @@ button.quiet:hover,
    that says the same thing. */
 .notice-warning { border-left-color: var(--danger); }
 .notice-ok { border-left-color: var(--ok); }
+
+/* --- a counselee's next session --- */
+
+/* Under the welcome banner and deliberately the loudest thing on the page. The accent
+   edge rather than a filled block: this is information, and a card the colour of a
+   button invites being pressed. */
+.next-session {
+  margin: 1rem 0 0;
+  border-left: 4px solid var(--accent);
+}
+
+.next-session h2 {
+  margin: 0 0 0.4rem;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+}
+
+/* The date is the point, so it is set at heading size while the label above it is
+   set small — the reverse of the usual arrangement, on purpose. clamp() so it does
+   not overflow a narrow phone, where a long day name plus a time is already wide. */
+.next-session-when {
+  margin: 0 0 0.35rem;
+  font-size: clamp(1.25rem, 4.5vw, 1.7rem);
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.next-session-when a { text-decoration: none; }
+.next-session-when a:hover { text-decoration: underline; }
 
 /* --- the home page's navigation cards --- */
 
