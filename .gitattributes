@@ -1,0 +1,27 @@
+# Line endings.
+#
+# Everything below is read by a Unix tool inside a container: /bin/sh execs the
+# entrypoints, cron parses the crontab, Caddy parses the Caddyfile, and Compose
+# parses the env file that scripts/bootstrap.sh derives from .env.example. All of
+# them treat a trailing carriage return as part of the data.
+#
+# That matters because the Docker build context is not git-aware: `docker compose
+# build` copies the working tree as it sits on disk. On a Windows checkout with
+# core.autocrlf=true — the default that ships with Git for Windows — the tree is
+# CRLF even though the committed blobs are LF, so the image gets `#!/bin/sh\r`
+# and every container dies with
+#
+#     exec /app/compose/web/entrypoint.sh: no such file or directory
+#
+# which names the file it just failed to open and does not mention the real
+# cause: /bin/sh\r is the interpreter that does not exist.
+#
+# eol=lf keeps these files LF in the working tree on every platform. Source code
+# is left to text=auto, so editors on Windows keep native endings there.
+
+* text=auto
+
+*.sh            text eol=lf
+*.cron          text eol=lf
+Caddyfile       text eol=lf
+.env.example    text eol=lf

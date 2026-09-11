@@ -10,7 +10,17 @@ from .base import env
 
 DEBUG = False
 
-ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS")
+# The loopback address is appended rather than left to whoever writes .env,
+# because it is not a deployment choice: the image's HEALTHCHECK probes
+# http://127.0.0.1:8000/healthz, and with only the public hostname allowed that
+# probe gets a 400 (DisallowedHost), the web service never reports healthy, and
+# caddy — which waits for exactly that — never starts. The site simply never comes
+# up, with nothing in the log but a rejected host.
+#
+# Safe to allow: nothing outside the compose network can reach the app port, and
+# every link this application puts in an email is built from SITE_BASE_URL rather
+# than from the host on the request, so a Host header cannot redirect a login link.
+ALLOWED_HOSTS = [*env.list("DJANGO_ALLOWED_HOSTS"), "127.0.0.1"]
 CSRF_TRUSTED_ORIGINS = env.list("DJANGO_CSRF_TRUSTED_ORIGINS")
 
 # Caddy terminates TLS and forwards X-Forwarded-Proto. This is only safe

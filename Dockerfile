@@ -29,8 +29,15 @@ RUN pip install -r requirements/base.txt
 COPY --chown=bctracker:bctracker . .
 
 # Git checkouts on Windows lose the executable bit, so set it here rather than
-# depending on how the repo was cloned.
-RUN chmod +x compose/web/entrypoint.sh compose/cron/entrypoint.sh
+# depending on how the repo was cloned. The same goes for line endings: .gitattributes
+# keeps these files LF in any checkout, but the build context is copied from disk
+# rather than from git, so strip carriage returns here too. A `#!/bin/sh\r` shebang
+# fails with "no such file or directory" naming the script — never the interpreter
+# that is actually missing — and a CRLF crontab silently appends \r to every command.
+RUN chmod +x compose/web/entrypoint.sh compose/cron/entrypoint.sh \
+             compose/cron/render-env.sh \
+    && sed -i 's/\r$//' compose/web/entrypoint.sh compose/cron/entrypoint.sh \
+                        compose/cron/render-env.sh compose/cron/bctracker.cron
 
 # Collected static files are baked into the image; the documents and backups
 # volumes are mounted at runtime and must be writable by the runtime user. The
