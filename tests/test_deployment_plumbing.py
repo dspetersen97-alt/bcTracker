@@ -370,7 +370,7 @@ class TestTheBootstrapScript:
         assert "BCTRACKER_MASTER_KEY=" in written
         assert "SITE_HOSTNAME=bc.example.org" in written
         # The comments explaining every setting came with it.
-        assert "Workspace App Password" in written
+        assert "it must be an app password rather than" in written
 
     def test_an_existing_configuration_is_never_overwritten(self, tmp_path):
         """The refusal that matters most in this script. The master key in an

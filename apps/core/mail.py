@@ -16,6 +16,11 @@ because of a real failure:
     as documents: a per-row DEK wrapped under ``BCTRACKER_MASTER_KEY``. A
     database dump therefore contains the mail host and username but not the
     secret, which is the same promise the document store makes.
+  * **The provider is not assumed.** Host, port *and* the choice between STARTTLS
+    and implicit TLS are all stored, so Google Workspace (587, STARTTLS) and Zoho
+    (either 587 STARTTLS or 465 implicit TLS) are a matter of configuration rather
+    than of code. What is not configurable is having neither: see the check
+    constraint on ``MailSettings``.
   * **Nothing here raises out of an ordinary send.** ``ConfiguredEmailBackend``
     falls back to the settings values if the row cannot be read at all — an
     unmigrated database or a master key that has gone missing must not turn every
@@ -112,24 +117,29 @@ def password_of(row: MailSettings) -> str:
 
 
 def smtp_config() -> dict:
-    """Host, port, TLS, username and password, database over environment."""
+    """Host, port, encryption, username and password, database over environment."""
     row = stored_settings()
     config = {
         "host": settings.EMAIL_HOST,
         "port": settings.EMAIL_PORT,
         "use_tls": settings.EMAIL_USE_TLS,
+        "use_ssl": settings.EMAIL_USE_SSL,
         "username": settings.EMAIL_HOST_USER,
         "password": settings.EMAIL_HOST_PASSWORD,
     }
     if row is None:
         return config
     if row.host:
-        # host, port and TLS move together: a row configured for a different
-        # provider must not keep the environment's port. Taking them as a set is
-        # what stops a half-applied change from being sent over plaintext.
+        # host, port and the encryption pair move together: a row configured for
+        # a different provider must not keep the environment's port, and must not
+        # keep its STARTTLS when the new host wants implicit TLS on 465 — that
+        # combination hangs until the socket times out. Taking them as a set is
+        # what stops a half-applied change from being unsendable, or sent in the
+        # clear.
         config["host"] = row.host
         config["port"] = row.port
         config["use_tls"] = row.use_tls
+        config["use_ssl"] = row.use_ssl
     if row.username:
         config["username"] = row.username
     stored_password = password_of(row)
@@ -215,14 +225,29 @@ class ConfiguredEmailBackend(SmtpEmailBackend):
     working for a caller that really does want to send as somebody else.
     """
 
-    def __init__(self, host=None, port=None, username=None, password=None, use_tls=None, **kwargs):
+    def __init__(
+        self,
+        host=None,
+        port=None,
+        username=None,
+        password=None,
+        use_tls=None,
+        use_ssl=None,
+        **kwargs,
+    ):
         config = smtp_config()
+        # Only one of the two is ever passed on. Django refuses both at once, and
+        # a caller that named one of them means that one: the stored value for the
+        # other would otherwise contradict it and raise inside the constructor.
+        if use_tls is None and use_ssl is None:
+            use_tls, use_ssl = config["use_tls"], config["use_ssl"]
         super().__init__(
             host=host or config["host"] or None,
             port=port or config["port"] or None,
             username=config["username"] if username is None else username,
             password=config["password"] if password is None else password,
-            use_tls=config["use_tls"] if use_tls is None else use_tls,
+            use_tls=use_tls,
+            use_ssl=use_ssl,
             **kwargs,
         )
 

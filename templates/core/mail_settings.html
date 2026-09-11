@@ -39,8 +39,18 @@
   <p class="muted">Use <code>smtp.gmail.com</code> on port 587 with STARTTLS, the sending
     mailbox as the username, and an <strong>app password</strong> — not the account's own
     password, which Google will refuse. Generate one at
-    <code>myaccount.google.com/apppasswords</code> with two-step verification switched on.
-    The password is encrypted with this deployment's master key before it is stored, and
-    it is never shown again.</p>
+    <code>myaccount.google.com/apppasswords</code> with two-step verification switched on.</p>
+
+  <h2>Zoho Mail</h2>
+  <p class="muted">Use <code>smtp.zoho.com</code> for a free or personal account and
+    <code>smtppro.zoho.com</code> for a custom domain, on port 587 with STARTTLS or port
+    465 with SSL/TLS — Zoho documents both. The username is the full address, and it has
+    to be an address or alias the account may send as. If two-factor authentication is on,
+    generate an application-specific password in Zoho and use that here. Accounts outside
+    the <code>.com</code> datacenter have a regional hostname, which Zoho shows under its
+    own server-configuration page.</p>
+
+  <p class="muted">Whichever provider this is, the password is encrypted with this
+    deployment's master key before it is stored, and it is never shown again.</p>
 </div>
 {% endblock %}

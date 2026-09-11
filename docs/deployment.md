@@ -20,7 +20,7 @@ order to do things in.
 | A host | TrueNAS SCALE, or any Linux host with Docker Engine and Compose v2. 4 GB RAM is comfortable; ClamAV is the hungry part |
 | A hostname | An A record pointing at the host. Automatic TLS needs ports 80 and 443 reachable **from the internet**; a LAN-only variant is in step 5 |
 | An encrypted dataset | For counseling documents and backups. Step 2 |
-| A mailbox | Google Workspace, with 2FA on the sending account and an **App Password** — not the account password. Entered in the web UI, not in a file. Step 7 |
+| A mailbox | Any SMTP provider — Google Workspace and Zoho are both documented in step 7 — with 2FA on the sending account and an **app password**, not the account password. Entered in the web UI, not in a file. Step 7 |
 | A decision | Who holds the master key, and where. Step 4 |
 
 Optional, and better added after the base stack is known good: Google Calendar
@@ -161,7 +161,7 @@ refuses to start without them:
 | `SITE_HOSTNAME` | The same host without the scheme. Caddy requests a certificate for it |
 | `ORG_TIME_ZONE` | The ministry's own zone. Office hours are interpreted here |
 
-**Mail is not in that table, on purpose.** The mailbox and its **App Password**
+**Mail is not in that table, on purpose.** The mailbox and its **app password**
 are entered in the web UI, under *Email settings*, and the password is stored
 sealed in the database rather than in this file — so leave `EMAIL_HOST_USER`,
 `EMAIL_HOST_PASSWORD` and `DEFAULT_FROM_EMAIL` empty and read step 7. The stack
@@ -257,7 +257,7 @@ thing anybody does here. Two facts about how it is configured:
 
 - **The settings live in the database and are edited in the web UI.** Sign in as
   an `admin`, open **Email settings**, and enter the server, the port, the
-  mailbox, its **App Password** and the address to send as. The password is
+  encryption, the mailbox, its **app password** and the address to send as. The password is
   sealed with the same envelope scheme as documents — a database dump contains
   the host and the username, never the secret — and it is write-only in the form:
   the page says whether a password is stored, and never shows it back.
@@ -273,11 +273,29 @@ works — so `invite_staff` **prints** the link when nothing is configured (step
 The first administrator gets in on a printed link, and then sets mail up from
 inside. Nothing about this step blocks steps 8 and 9.
 
+**Any SMTP provider will do.** Google Workspace is the default in `.env.example`
+and nothing in the application assumes it. The two that are documented on the
+settings page itself:
+
+| Provider | Server | Port and encryption |
+| --- | --- | --- |
+| Google Workspace | `smtp.gmail.com` | 587, STARTTLS |
+| Zoho — free or personal account | `smtp.zoho.com` | 587 STARTTLS, or 465 SSL/TLS |
+| Zoho — custom domain | `smtppro.zoho.com` | 587 STARTTLS, or 465 SSL/TLS |
+
+Zoho accounts outside the `.com` datacenter have a regional hostname; Zoho shows
+it under its own server-configuration page. The encryption is a single choice
+rather than two switches, and there is no option for sending unencrypted: port
+465 means implicit TLS and anything else means STARTTLS. Pick the one the
+provider documents for the port you entered — the form refuses the two
+combinations that are always wrong, because a mismatch there does not fail, it
+hangs until the socket times out.
+
 Once that administrator is in, prove it: **Email settings → Send a test
-message**, which sends to an address you choose and shows the provider's own
-words if it fails. The page keeps the time of the last test and the last error, so
-whoever opens it next can see the state without repeating the test. Host-side, the
-same thing:
+message**, which sends to that administrator's own address and nowhere else, and
+shows the provider's own words if it fails. The page keeps the time of the last
+test and the last error, so whoever opens it next can see the state without
+repeating the test. Host-side, the same thing:
 
 ```bash
 docker compose exec web python manage.py shell -c \
@@ -286,10 +304,14 @@ docker compose exec web python manage.py shell -c \
    send_test_message(recipient='you@example.org')"
 ```
 
-If it fails: the password must be a Workspace **App Password**, the port is 587
-with STARTTLS, and the From address has to be one the account is allowed to send
-as. Workspace has no bounce webhook, so a *rejected* message is invisible to this
-application — which is why this is a step and not a footnote.
+If it fails, in the order these actually go wrong: the password has to be an **app
+password** rather than the account's own — Google refuses the account password
+outright, and Zoho does too once two-factor authentication is on; the port and the
+encryption have to be the pair the provider documents; and the From address has to
+be one the mailbox is allowed to send as, which for Zoho means the account address
+or one of its aliases. Neither provider offers a bounce webhook, so a *rejected*
+message is invisible to this application — which is why this is a step and not a
+footnote.
 
 The startup check in step 6 names this state: incomplete mail settings appear in
 the log as `mail.I001` with the missing piece spelled out. It is deliberately an
@@ -610,9 +632,11 @@ the scheme: `https://counseling.example.org`, not the bare hostname.
 its place.
 
 **Emails do not arrive.** *Email settings → Send a test message*, which shows the
-provider's own refusal and records it on the page. Workspace reports nothing back
-to this application afterwards, so test it directly rather than inferring anything
-from a missing invitation. Step 7.
+provider's own refusal and records it on the page. No provider here reports
+anything back to this application after a message is accepted, so test it directly
+rather than inferring anything from a missing invitation. A test that neither
+succeeds nor refuses but sits there is the port and the encryption disagreeing.
+Step 7.
 
 **Stripe deliveries get a 400.** The signing secret does not match the endpoint,
 or the delivery is older than `STRIPE_WEBHOOK_TOLERANCE_SECONDS`. The response is

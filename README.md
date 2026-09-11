@@ -120,7 +120,11 @@ had to leave the application to get something done:
   reports the provider's own words, and incomplete mail is an `Info` deploy check
   rather than a 500 on the first counselee somebody creates. That 500 is what
   prompted all of this: an install passed every check and then failed on the one
-  page it was built to do first.
+  page it was built to do first. Any SMTP provider will do — Google Workspace and
+  Zoho are both documented on the page itself, including Zoho's port 465. The
+  encryption is one choice rather than two switches, so the pair Django refuses
+  outright, and the pair that sends a mailbox password in the clear, are both
+  unreachable from the form and from the table.
 - **Documents can be read without downloading them.** Narrowly: PDF, JPEG, PNG and
   plain text, and only when the stored content type *and* the first decrypted
   frame agree. Served `Content-Disposition: inline` with `nosniff`, audited exactly

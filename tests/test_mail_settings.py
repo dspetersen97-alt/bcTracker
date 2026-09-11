@@ -13,6 +13,7 @@ Three properties are worth more here than the count of assertions:
 
 import pytest
 from django.core import mail as django_mail
+from django.db import IntegrityError, transaction
 from django.urls import reverse
 
 from apps.accounts.models import Role
@@ -29,10 +30,18 @@ TEST_URL = reverse("core:mail_test")
 FORM = {
     "host": "smtp.gmail.com",
     "port": "587",
-    "use_tls": "on",
+    "encryption": "starttls",
     "username": "counseling@example.org",
     "from_email": "counseling@example.org",
     "password": "an-app-password",  # noqa: S106
+}
+
+#: The same, for a provider offering implicit TLS on 465 — Zoho documents both,
+#: and a free Zoho mailbox is what this deployment was first tested against.
+ZOHO_FORM = FORM | {
+    "host": "smtp.zoho.com",
+    "port": "465",
+    "encryption": "ssl",
 }
 
 
@@ -94,22 +103,22 @@ class TestTheMergedConfiguration:
         settings.EMAIL_HOST = "smtp.example.net"
         settings.EMAIL_HOST_USER = "from-the-env@example.org"
         row = MailSettings.load()
-        row.host = "smtp.gmail.com"
+        row.host = "smtp.zoho.com"
         row.port = 465
-        row.use_tls = False
+        row.use_tls, row.use_ssl = False, True
         row.username = "from-the-database@example.org"
         mail.set_password(row, "sealed")
         row.save()
 
         config = mail.smtp_config()
 
-        assert config["host"] == "smtp.gmail.com"
+        assert config["host"] == "smtp.zoho.com"
         assert config["username"] == "from-the-database@example.org"
         assert config["password"] == "sealed"
-        # Host, port and TLS move as a set: a row configured for one provider must
-        # not keep the environment's port, or a change lands half-applied and the
-        # mail goes out in the clear.
-        assert (config["port"], config["use_tls"]) == (465, False)
+        # Host, port and the encryption pair move as a set: a row configured for
+        # one provider must not keep the environment's port or its STARTTLS, or a
+        # change lands half-applied and the connection hangs instead of failing.
+        assert (config["port"], config["use_tls"], config["use_ssl"]) == (465, False, True)
 
     def test_the_environment_is_used_when_there_is_no_row(self, settings):
         settings.EMAIL_HOST = "smtp.example.net"
@@ -148,6 +157,91 @@ class TestTheMergedConfiguration:
 
         assert backend.username == "someone-else@example.org"
         assert backend.password == "theirs"
+
+
+class TestAProviderThatIsNotGoogle:
+    """Zoho in these tests, and by extension anything speaking SMTP.
+
+    Worth its own class because the defaults, the help text and the original
+    design were all Google Workspace, and "configurable in principle" is not the
+    same claim as "a second provider works". What makes it true is that the host,
+    the port *and* the choice between STARTTLS and implicit TLS are all stored
+    together — Zoho documents port 465, and 465 with STARTTLS does not fail, it
+    hangs until the socket times out.
+    """
+
+    def test_a_zoho_mailbox_is_saved_and_reaches_the_backend(self, client, sign_in, admin_user):
+        sign_in(admin_user)
+
+        response = client.post(SETTINGS_URL, ZOHO_FORM)
+
+        assert response.status_code == 302
+        row = MailSettings.load()
+        assert (row.host, row.port) == ("smtp.zoho.com", 465)
+        assert (row.use_tls, row.use_ssl) == (False, True)
+        backend = mail.ConfiguredEmailBackend()
+        assert (backend.host, backend.port) == ("smtp.zoho.com", 465)
+        assert (backend.use_tls, backend.use_ssl) == (False, True)
+
+    def test_starttls_stores_the_pair_the_other_way_round(self, client, sign_in, admin_user):
+        sign_in(admin_user)
+
+        client.post(SETTINGS_URL, FORM)
+
+        assert (MailSettings.load().use_tls, MailSettings.load().use_ssl) == (True, False)
+
+    def test_the_choice_survives_a_reload_of_the_page(self, client, sign_in, admin_user):
+        """An administrator editing the From address must not silently move a Zoho
+        install back onto STARTTLS because the form defaulted to it."""
+        sign_in(admin_user)
+        client.post(SETTINGS_URL, ZOHO_FORM)
+
+        form = client.get(SETTINGS_URL).context["form"]
+
+        assert form["encryption"].value() == "ssl"
+
+    @pytest.mark.parametrize("port,encryption", [("465", "starttls"), ("587", "ssl")])
+    def test_a_port_that_disagrees_with_the_encryption_is_refused(
+        self, client, sign_in, admin_user, port, encryption
+    ):
+        """Refused here because it cannot usefully be reported anywhere else: the
+        connection hangs rather than being rejected, and the administrator is left
+        with a timeout that names nothing."""
+        sign_in(admin_user)
+
+        response = client.post(SETTINGS_URL, FORM | {"port": port, "encryption": encryption})
+
+        assert response.status_code == 200
+        assert "encryption" in response.context["form"].errors
+
+    def test_the_database_refuses_both_at_once(self):
+        """Both set raises inside Django's SMTP backend, which would be a 500 on
+        the next invitation rather than an error on the form. Guarded in the schema
+        as well, because the form is not the only thing that writes this row."""
+        row = MailSettings.load()
+        row.use_tls, row.use_ssl = True, True
+
+        with pytest.raises(IntegrityError), transaction.atomic():
+            row.save()
+
+    def test_and_refuses_neither(self):
+        """Neither one is the mailbox password crossing the internet in the clear.
+        There is no option for it on the form and no room for it in the table."""
+        row = MailSettings.load()
+        row.use_tls, row.use_ssl = False, False
+
+        with pytest.raises(IntegrityError), transaction.atomic():
+            row.save()
+
+    def test_the_environment_can_select_implicit_tls_too(self, settings):
+        """An install configured entirely from .env, before anybody signs in."""
+        settings.EMAIL_HOST = "smtp.zoho.com"
+        settings.EMAIL_PORT = 465
+        settings.EMAIL_USE_TLS, settings.EMAIL_USE_SSL = False, True
+
+        config = mail.smtp_config()
+
+        assert (config["port"], config["use_tls"], config["use_ssl"]) == (465, False, True)
 
 
 class TestTheFromAddress:
@@ -260,6 +354,16 @@ class TestTheSettingsPage:
         page = client.get(SETTINGS_URL).content.decode()
 
         assert "an-app-password" not in page
+
+    def test_the_page_names_the_settings_for_both_providers(self, client, sign_in, admin_user):
+        """The hostname and port are the part nobody remembers, and an
+        administrator who has to leave to find them often does not come back."""
+        sign_in(admin_user)
+
+        page = client.get(SETTINGS_URL).content.decode()
+
+        assert "smtp.gmail.com" in page
+        assert "smtp.zoho.com" in page
 
     def test_a_username_with_no_password_is_refused(self, client, sign_in, admin_user):
         sign_in(admin_user)

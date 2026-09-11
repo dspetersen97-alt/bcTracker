@@ -186,7 +186,7 @@ render_env() {
         # No password: it belongs in the database, sealed under the master key, and
         # is entered under Email settings once somebody can sign in. Leaving it out
         # of this file is the point — .env is readable by whoever can read the host,
-        # and a Workspace App Password is a live credential for the ministry's
+        # and a mailbox app password is a live credential for the ministry's
         # mailbox.
         echo "EMAIL_HOST_USER=$email"
         echo "EMAIL_HOST_PASSWORD="
@@ -509,13 +509,15 @@ SUMMARY
 cat <<SUMMARY
 
 2. FINISH MAIL IN THE APPLICATION. Sign in as the administrator from step 4 and
-   open Email settings. Enter the sending mailbox${email:+ ($email)} and its
-   Workspace App Password — not the account password, which Google refuses — then
-   press the button that sends a test message to your own address.
+   open Email settings. Enter the sending mailbox${email:+ ($email)}, the server
+   and port your provider documents, and an app password — not the account
+   password, which Google refuses outright and Zoho refuses once two-factor
+   authentication is on — then press the button that sends a test message to your
+   own address. The page itself lists the settings for Google Workspace and Zoho.
 
    The password is encrypted with this deployment's master key and stored in the
    database, which is why it is not in .env: that file is readable by anyone who
-   can read this host, and an App Password is a live credential for the ministry's
+   can read this host, and an app password is a live credential for the ministry's
    mailbox.
 
    Until mail works, nothing is emailed — and nothing breaks either. Creating a

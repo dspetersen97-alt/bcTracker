@@ -244,9 +244,20 @@ class TestClashes:
         assert "no_overlapping" not in str(refusal.value)
 
     def test_back_to_back_appointments_are_both_allowed(self, practice, second_counselee):
-        """Half-open ranges. With inclusive bounds a full morning would be impossible."""
-        first, second = offered(practice)[:2]
-        assert first.end == second.start
+        """Half-open ranges. With inclusive bounds a full morning would be impossible.
+
+        The pair is searched for rather than taken as the first two offered, because
+        the minimum-notice cutoff lands wherever the clock says: run late enough in
+        the day and only the last of today's hours survives it, which makes the
+        first two offered slots a day apart and this test fail for a reason that has
+        nothing to do with what it is asserting.
+        """
+        slots = offered(practice)
+        first, second = next(
+            (earlier, later)
+            for earlier, later in zip(slots, slots[1:], strict=False)
+            if earlier.end == later.start
+        )
 
         book_at(practice, first)
         book_at(practice, second, counselee=second_counselee)

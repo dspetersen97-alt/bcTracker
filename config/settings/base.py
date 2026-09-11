@@ -420,9 +420,10 @@ CLAMAV_TIMEOUT_SECONDS = env.int("CLAMAV_TIMEOUT_SECONDS", default=30)
 
 # --- Email ----------------------------------------------------------------
 
-# Google Workspace SMTP. Deliberately kept behind Django's email backend
-# interface: Workspace has a low daily send cap and no bounce reporting, so
-# moving to a transactional provider should be a settings change only.
+# Any SMTP provider, defaulting to Google Workspace. Deliberately kept behind
+# Django's email backend interface: Workspace has a low daily send cap and no
+# bounce reporting, so moving to a transactional provider should be a settings
+# change only.
 #
 # The default backend reads its host, username and password from the database
 # first and from the values below second — see apps/core/mail.py for why, and for
@@ -432,7 +433,13 @@ CLAMAV_TIMEOUT_SECONDS = env.int("CLAMAV_TIMEOUT_SECONDS", default=30)
 EMAIL_BACKEND = env("EMAIL_BACKEND", default="apps.core.mail.ConfiguredEmailBackend")
 EMAIL_HOST = env("EMAIL_HOST", default="smtp.gmail.com")
 EMAIL_PORT = env.int("EMAIL_PORT", default=587)
-EMAIL_USE_TLS = True
+# Implicit TLS for the providers that offer only port 465 — Zoho documents both.
+# Derived rather than configured separately, for two reasons: Django raises if
+# both are set, and there is no value of EMAIL_USE_TLS that turns encryption off,
+# so a typo in .env cannot end with the mailbox password crossing the network in
+# the clear.
+EMAIL_USE_SSL = env.bool("EMAIL_USE_SSL", default=False)
+EMAIL_USE_TLS = not EMAIL_USE_SSL
 EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
 # No placeholder default, and an empty value in .env is treated as absent rather

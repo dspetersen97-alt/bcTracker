@@ -121,16 +121,24 @@ class MailSettings(TimeStampedModel):
     #: configurations where a reader has to guess which is live.
     SINGLETON_PK = 1
 
-    host = models.CharField(max_length=255, blank=True, help_text=_("For example smtp.gmail.com."))
+    host = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text=_("For example smtp.gmail.com, or smtp.zoho.com."),
+    )
     port = models.PositiveIntegerField(default=587)
     use_tls = models.BooleanField(
         default=True,
-        help_text=_("STARTTLS on port 587. Leave this on unless your provider says otherwise."),
+        help_text=_("STARTTLS, usually on port 587."),
+    )
+    use_ssl = models.BooleanField(
+        default=False,
+        help_text=_("Implicit TLS, usually on port 465. Offered instead of STARTTLS."),
     )
     username = models.CharField(
         max_length=255,
         blank=True,
-        help_text=_("The mailbox that sends. For Google Workspace, the full address."),
+        help_text=_("The mailbox that sends. Usually the full address."),
     )
     from_email = models.EmailField(
         blank=True,
@@ -162,6 +170,18 @@ class MailSettings(TimeStampedModel):
         verbose_name_plural = _("mail settings")
         constraints = [
             models.CheckConstraint(condition=models.Q(id=1), name="mail_settings_is_a_singleton"),
+            # Exactly one transport security, for two separate reasons. Django's
+            # SMTP backend raises ValueError when both are set, which would turn
+            # every send into a server error rather than a form error. And
+            # neither one set means the mailbox password crosses the network in
+            # the clear, which this deployment does not do — the environment
+            # path derives EMAIL_USE_TLS the same way, so there is no route to
+            # plaintext SMTP from either side.
+            models.CheckConstraint(
+                condition=models.Q(use_tls=True, use_ssl=False)
+                | models.Q(use_tls=False, use_ssl=True),
+                name="mail_settings_one_transport_security",
+            ),
         ]
 
     def __str__(self) -> str:
