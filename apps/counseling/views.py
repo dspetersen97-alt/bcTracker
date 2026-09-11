@@ -255,6 +255,36 @@ def case_detail(request, public_id):
     )
 
 
+#: Where a half-filled New Case form waits while its administrator is somewhere
+#: else. In the session rather than in the query string: a case label is usually a
+#: family's name, and a URL is written into every access log and handed to every
+#: page it links out to.
+CASE_DRAFT_SESSION_KEY = "counseling.case_create_draft"
+
+#: What is kept, named one by one rather than taken as "whatever was posted", so a
+#: field added to the page later does not quietly become session state as well.
+CASE_DRAFT_FIELDS = ("label", "counselor", "kind", "notes", "find")
+
+
+def _keep_case_draft(request):
+    """Put what has been typed so far where it will survive a redirect."""
+    request.session[CASE_DRAFT_SESSION_KEY] = {
+        **{name: request.POST.get(name, "") for name in CASE_DRAFT_FIELDS},
+        "counselees": request.POST.getlist("counselees"),
+    }
+
+
+def _resume_case_draft(request):
+    """The draft, and it is gone once read.
+
+    Popped rather than left in place because a draft is a page somebody was in the
+    middle of, not a preference: an administrator who abandoned a case last Tuesday
+    should not find it typed in for them today. The consequence to know about is that
+    two New Case tabs share one draft, and the second to be sent away wins.
+    """
+    return request.session.pop(CASE_DRAFT_SESSION_KEY, None) or {}
+
+
 @login_required
 @require_http_methods(["GET", "POST"])
 def case_create(request):
@@ -265,16 +295,41 @@ def case_create(request):
     counselee returns to find them already ticked rather than having to find them
     in a list of everybody the ministry has ever seen.
 
+    Two of the buttons on the page are not submissions of the form at all. "Search"
+    narrows the list of counselees, and "Create a counselee account" leaves to make
+    one. Both store the draft and come back to a fresh GET, which is worth doing for
+    three reasons: the page does not open covered in "this field is required" for
+    fields nobody has reached yet, a refresh afterwards does not re-post anything,
+    and nothing anybody typed ends up in a URL.
+
     Adding a member has a real disclosure consequence, so each one is audited
     individually and with the same verb the membership page uses — the trail
     should not depend on which page the membership was created from.
     """
     require_perm(request, "counseling.add_case")
 
-    initial = {}
+    if request.method == "POST" and (
+        "search" in request.POST or "create_counselee" in request.POST
+    ):
+        _keep_case_draft(request)
+        if "search" in request.POST:
+            return redirect("counseling:case_create")
+        return redirect(
+            with_query(
+                reverse("counseling:counselee_create"),
+                next=reverse("counseling:case_create"),
+            )
+        )
+
+    initial = _resume_case_draft(request) if request.method == "GET" else {}
     preselected = request.GET.getlist("counselee")
     if preselected:
-        initial["counselees"] = eligible_counselees().filter(public_id__in=preselected)
+        # Added to what the draft already had ticked rather than replacing it: an
+        # administrator who left to create the second spouse still wants the first.
+        initial["counselees"] = [
+            *initial.get("counselees", []),
+            *eligible_counselees().filter(public_id__in=preselected).values_list("pk", flat=True),
+        ]
 
     form = CaseCreateForm(request.POST or None, initial=initial)
     if request.method == "POST" and form.is_valid():
@@ -307,20 +362,9 @@ def case_create(request):
             messages.success(request, _("Case opened. Add the counselees next."))
         return redirect("counseling:case_detail", public_id=case.public_id)
 
-    return render(
-        request,
-        "counseling/case_form.html",
-        {
-            "form": form,
-            "case": None,
-            # Where the New Counselee page should send them back to, with whatever
-            # is already selected kept — see counselee_create.
-            "counselee_create_url": with_query(
-                reverse("counseling:counselee_create"),
-                next=reverse("counseling:case_create"),
-            ),
-        },
-    )
+    # No URL for the New Counselee page in the context any more: leaving for it is a
+    # submission now, so that the draft can be kept, and the page posts back here.
+    return render(request, "counseling/case_form.html", {"form": form, "case": None})
 
 
 @login_required

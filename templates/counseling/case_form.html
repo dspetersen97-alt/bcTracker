@@ -6,16 +6,51 @@
   <h1>{% if case %}Edit case{% else %}Open a case{% endif %}</h1>
   <form method="post">
     {% csrf_token %}
-    {% include "includes/form.html" %}
-    <button type="submit">{% if case %}Save{% else %}Open case{% endif %}</button>
-  </form>
+    {% if case %}
+      {% include "includes/form.html" %}
+      {% comment %} Save and a way out, side by side. Somebody who opened this page to
+         check what the notes said needs to leave without wondering whether closing
+         the tab counted as anything — and it is a link rather than a second submit
+         button so that it cannot post the form by accident. {% endcomment %}
+      <div class="actions">
+        <button type="submit">Save</button>
+        <a class="button quiet" href="{% url 'counseling:case_detail' case.public_id %}">Go back</a>
+      </div>
+    {% else %}
+      {% comment %} Laid out field by field rather than through includes/form.html,
+         because the search box needs its own button beside it and the field loop
+         cannot put one there. tests/test_new_case_page.py asserts that every field on
+         the form reaches this page, so adding one to CaseCreateForm and forgetting it
+         here is a failure rather than a field nobody can fill in. {% endcomment %}
+      {% include "includes/form_errors.html" %}
+      {% include "includes/field.html" with field=form.label %}
+      {% include "includes/field.html" with field=form.counselor %}
+      {% include "includes/field.html" with field=form.kind %}
+      {% include "includes/field.html" with field=form.notes %}
 
-  {% if counselee_create_url %}
-    <p class="muted">
-      Not on the list? <a href="{{ counselee_create_url }}">Create a counselee account</a> —
-      you will come back here with them selected. Anything typed above is not kept, so
-      it is worth doing first.
-    </p>
-  {% endif %}
+      {% comment %} Search is a submit button, because with no JavaScript in this
+         application the only thing that can filter a list is the server. It is also
+         the *first* submit button in the form, and that is deliberate: pressing
+         Enter in a text field presses the first one, and "search again" is a
+         harmless thing to do by accident where "open the case" is not.
+         formnovalidate for the same reason — leaving to search is not the moment to
+         be told the label is missing. {% endcomment %}
+      <div class="field-with-aside">
+        {% include "includes/field.html" with field=form.find %}
+        <button type="submit" name="search" class="quiet" formnovalidate>Search</button>
+      </div>
+      {% include "includes/field.html" with field=form.counselees %}
+
+      <div class="actions">
+        <button type="submit">Open case</button>
+      </div>
+
+      <p class="muted">
+        Not on the list?
+        <button type="submit" name="create_counselee" class="link-button" formnovalidate>Create a counselee account</button>
+        — you will come back here with them ticked and everything you have typed still in place.
+      </p>
+    {% endif %}
+  </form>
 </div>
 {% endblock %}

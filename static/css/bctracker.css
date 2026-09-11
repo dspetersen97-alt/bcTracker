@@ -420,10 +420,11 @@ button.quiet,
 button.quiet:hover,
 .button.quiet:hover { background: var(--paper); filter: none; }
 
-/* A field with a control alongside it, for the one case that needs it: the date on
-   the scheduling page, with the link that turns it into a weekday. align-items:end
-   puts the button on the input's baseline rather than the label's, and the field
-   keeps flex:1 so the input is not squeezed by the length of the link's text. */
+/* A field with a control alongside it: the date on the scheduling page with the link
+   that turns it into a weekday, and the search box on the New Case page with the
+   button that runs the search. align-items:end puts the control on the input's
+   baseline rather than the label's, and the field keeps flex:1 so the input is not
+   squeezed by the length of the control's text. */
 .field-with-aside {
   display: flex;
   align-items: end;

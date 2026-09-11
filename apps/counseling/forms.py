@@ -15,6 +15,7 @@ Two things these do that a plain ModelForm would not:
 """
 
 from django import forms
+from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 
 from apps.accounts.forms import UserCreateForm
@@ -61,9 +62,19 @@ class CaseCreateForm(CaseForm):
 
     Checkboxes rather than a multi-select: picking two people out of a native
     multi-select needs ctrl-click, which is the sort of thing that quietly loses
-    the second spouse. The list is every active counselee, which is fine for a
-    ministry's roster and would not be for a hospital's.
+    the second spouse. What the checkboxes list is a search result — see ``find``
+    below — because a ministry that has seen four hundred people should not be
+    scrolling through four hundred of them to open one case.
     """
+
+    #: Narrows the list of counselees. Its own submit button on the page, because
+    #: without JavaScript the only thing that can filter a list is the server, and
+    #: the only way to ask the server is to send the form.
+    find = forms.CharField(
+        required=False,
+        label=_("Find a counselee"),
+        help_text=_("Part of a name or an address, then Search. Blank lists everybody."),
+    )
 
     counselees = forms.ModelMultipleChoiceField(
         queryset=User.objects.none(),
@@ -75,12 +86,60 @@ class CaseCreateForm(CaseForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["counselees"].queryset = eligible_counselees()
+        self.fields["counselees"].queryset = self._offered()
         self.fields["counselees"].label_from_instance = (
             lambda user: f"{user.full_name} ({user.email})"
         )
         #: The memberships ``save`` created, for the view to audit.
         self.members = []
+
+    def _offered(self):
+        """The counselees this form will show — and, just as much, accept.
+
+        A narrowed queryset is a narrowed *validator*: whoever is left out of it is
+        not a valid choice, and a form that filtered the list without saying so
+        would reject the person the administrator ticked before searching again. So
+        anybody already chosen is added back regardless of the search term, and the
+        term itself is read from the submitted data so that the queryset on a POST is
+        the same one the page was rendered with.
+        """
+        everybody = eligible_counselees()
+        term = (self._value_of("find") or "").strip()
+        if not term:
+            return everybody
+
+        matching = Q()
+        for word in term.split():
+            # Every word has to match something, so "ada ashford" finds her and
+            # "ada" alone finds her too. Word by word rather than against the whole
+            # string, because no single column holds "Ada Ashford".
+            matching &= (
+                Q(first_name__icontains=word)
+                | Q(last_name__icontains=word)
+                | Q(email__icontains=word)
+            )
+        return everybody.filter(matching | Q(pk__in=self._chosen()))
+
+    def _value_of(self, name):
+        """What was submitted for ``name``, or what the page was rendered with."""
+        if self.is_bound:
+            return self.data.get(name)
+        return self.initial.get(name)
+
+    def _chosen(self):
+        """The counselee ids in hand, whether posted or restored from a draft.
+
+        Digits only. These reach a ``pk__in`` lookup, and a hand-built request is
+        free to put a word there — which would be a 500 on a page an administrator
+        uses every week rather than the empty result it deserves.
+        """
+        widget = self.fields["counselees"].widget
+        if self.is_bound:
+            raw = widget.value_from_datadict(self.data, self.files, "counselees") or []
+        else:
+            raw = self.initial.get("counselees") or []
+        ids = [getattr(value, "pk", value) for value in raw]
+        return [str(value) for value in ids if str(value).isdigit()]
 
     def save(self, commit=True):
         """The case and its memberships, or neither.
