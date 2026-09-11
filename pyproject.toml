@@ -1,0 +1,32 @@
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+extend-exclude = [".venv", "*/migrations/*"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "DJ",   # flake8-django
+    "S",    # flake8-bandit — security lints matter here
+    "UP",   # pyupgrade
+    "C4",   # comprehensions
+    "T20",  # no stray print()
+]
+ignore = [
+    "S101",  # assert is how pytest works
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Settings legitimately reference hardcoded defaults and do star-imports.
+"config/settings/*" = ["F403", "F405", "S105"]
+"tests/*" = ["S105", "S106"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+python_files = ["test_*.py"]
+testpaths = ["tests"]
+# --strict-markers so a typo'd marker fails instead of silently skipping.
+addopts = "--strict-markers --reuse-db"

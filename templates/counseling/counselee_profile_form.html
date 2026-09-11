@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}{% if is_own %}My details{% else %}{{ profile.user.full_name }}{% endif %} — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>{% if is_own %}My details{% else %}Details for {{ profile.user.full_name }}{% endif %}</h1>
+  {% if is_own %}
+    <p class="muted">Your counselor and the ministry office can see this. It is how
+      we reach someone if there is an emergency during a session.</p>
+  {% endif %}
+  <form method="post">
+    {% csrf_token %}
+    {% include "includes/form.html" %}
+    <button type="submit">Save</button>
+  </form>
+</div>
+{% endblock %}

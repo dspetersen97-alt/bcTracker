@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Check your email — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>Check your email</h1>
+  {% comment %} Worded so it says the same thing whether or not the address has an account.
+     Telling a visitor that an address is unknown here would reveal who is being
+     counseled, which is the disclosure this whole application exists to avoid. {% endcomment %}
+  <p>If that address belongs to an account set up for email sign-in, a link is
+     on its way. It works once, and expires shortly.</p>
+  <p class="alt">Nothing arrived? Check your spam folder, or
+     <a href="{% url 'accounts:magic_link_request' %}">try again</a>.
+     Your counselor can also set you up with a password.</p>
+</div>
+{% endblock %}

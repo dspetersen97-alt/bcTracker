@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Fee schedule — bcTracker{% endblock %}
+
+{% block content %}
+<h1>Fee schedule</h1>
+<p class="role">What the ministry charges. A session takes the rate that was in force
+  on the day it happened, and keeps it — changing a rate never repriced anything
+  already recorded.</p>
+
+<table class="table">
+  <thead>
+    <tr><th>What for</th><th>Who</th><th>Amount</th><th>From</th><th>Until</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for fee in fees %}
+      <tr>
+        <td>{{ fee.get_kind_display }}</td>
+        <td>{% if fee.counselor %}{{ fee.counselor.full_name }}
+            {% else %}<span class="muted">Ministry standard</span>{% endif %}</td>
+        <td class="amount">{{ fee.display_amount }}</td>
+        <td>{{ fee.effective_from }}</td>
+        <td>{{ fee.effective_to|default:"—" }}
+          {% if fee.is_current %}<span class="badge">current</span>{% endif %}</td>
+        <td class="row-actions">
+          {% comment %} Withdrawn, not deleted: invoices were raised against it. See
+             views.fee_end. {% endcomment %}
+          {% if not fee.effective_to %}
+            <form method="post" action="{% url 'billing:fee_end' fee.pk %}" class="inline-form">
+              {% csrf_token %}
+              <button type="submit" class="link-button">Withdraw</button>
+            </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="6" class="empty">No rates set. Sessions are being recorded and
+        not charged for until there is one.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div class="actions">
+  <a class="button" href="{% url 'billing:fee_add' %}">Add a rate</a>
+  <a href="{% url 'billing:index' %}">Back to billing</a>
+</div>
+{% endblock %}

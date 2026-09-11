@@ -1,0 +1,10 @@
+{% comment %} The Messages link, for the two roles that hold a place in a conversation.
+
+   Not in the admin's navigation on purpose, though an administrator may reach
+   messaging:index and read what is there: correspondence is something they open
+   from a case they are looking into, not a ministry-wide inbox they are nudged
+   towards. And not in financial_admin's, where the page itself answers 403.
+
+   unread_messages comes from apps.messaging.context. {% endcomment %}
+<a href="{% url 'messaging:index' %}">Messages{% if unread_messages %}
+  <span class="badge badge-count">{{ unread_messages }}</span>{% endif %}</a>

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Continue signing in — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>Continue signing in</h1>
+  {% comment %} The link is not spent by loading this page, only by the button below. Mail
+     scanners and inbox previewers routinely fetch links; if a GET consumed the
+     token, the link would already be used up by the time it was clicked. {% endcomment %}
+  <p>Select the button to finish signing in.</p>
+  <form method="post" action="{% url 'accounts:magic_link_consume' token=token %}">
+    {% csrf_token %}
+    <button type="submit" class="primary">Sign in</button>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,18 @@
+{% autoescape off %}Hello{% if recipient.first_name %} {{ recipient.first_name }}{% endif %},
+
+{{ counselee_name }} has asked for an appointment with you:
+
+  {{ when }} ({{ minutes }} minutes)
+{% if is_joint %}
+Everyone on the case is expected to attend.
+{% endif %}
+It is a request until you confirm it, and the time is held for you in the
+meantime. You can confirm or move it here:
+
+{{ url }}
+
+Anything they wrote when booking is on that page rather than in this email.
+
+bcTracker
+{{ site_url }}
+{% endautoescape %}

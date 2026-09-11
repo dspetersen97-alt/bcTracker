@@ -1,0 +1,30 @@
+.instructions/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Django
+*.log
+staticfiles/
+local_settings.py
+
+# Secrets — never commit. See .env.example for the required keys.
+.env
+.env.*
+!.env.example
+secrets/
+
+# Counselee data must never reach the repo.
+documents/
+media/
+backups/
+
+# Tooling
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/

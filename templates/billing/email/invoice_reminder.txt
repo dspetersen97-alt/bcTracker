@@ -1,0 +1,24 @@
+{% autoescape off %}Hello{% if recipient.first_name %} {{ recipient.first_name }}{% endif %},
+
+This is a reminder that an invoice on your account is now due.
+
+  Invoice {{ number }}
+  Outstanding: {{ balance }}{% if due_on %}
+  Was due:     {{ due_on }}{% endif %}
+
+{{ url }}
+{% if can_pay_by_card %}
+You can pay by card from that page, or speak to the office to pay another way.
+{% else %}
+Speak to the office to arrange payment. Please do not send card details by email.
+{% endif %}
+{% comment %} One reminder, ever — see the send_invoice_reminders command. Somebody in
+   counseling who cannot pay is a pastoral conversation, not an escalating series of
+   emails, so this message has to leave that door open rather than only ask. {% endcomment %}
+If you have already paid this, thank you — it may have crossed with this email.
+If paying it is a difficulty, please tell us rather than leaving it; the ministry
+would far rather talk about it.
+
+bcTracker
+{{ site_url }}
+{% endautoescape %}

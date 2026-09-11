@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Move an appointment — bcTracker{% endblock %}
+
+{% block content %}
+<h1>Move this appointment</h1>
+<p class="role">
+  Currently {{ booking.starts_at|date:"l j F Y" }} at {{ booking.starts_at|time:"g:i a" }}
+</p>
+
+<form method="post" class="stacked">
+  {% csrf_token %}
+  {% include "includes/form.html" %}
+  <div class="actions">
+    <button type="submit">Move it</button>
+    <a href="{% url 'scheduling:detail' booking.pk %}">Leave it where it is</a>
+  </div>
+</form>
+
+<p class="muted">
+  Give the time in your own timezone. Everyone attending is emailed, and if a reminder
+  had already gone out they will get a fresh one for the new time.
+</p>
+{% endblock %}

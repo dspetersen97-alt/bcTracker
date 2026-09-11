@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}New counselee — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>Create a counselee account</h1>
+  <p class="muted">They will be emailed a link to set their own password, so nobody
+    in the office ever knows it.</p>
+  <form method="post">
+    {% csrf_token %}
+    {% include "includes/form.html" %}
+    <button type="submit">Create account and send invitation</button>
+  </form>
+</div>
+{% endblock %}

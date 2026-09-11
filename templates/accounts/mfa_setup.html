@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Set up two-factor authentication — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>Set up two-factor authentication</h1>
+  <p>You handle other people's counseling records, so a password alone is not
+     enough. Scan this code with an authenticator app — Google Authenticator,
+     Authy, 1Password, or any other — then enter the six digits it shows.</p>
+
+  {% comment %} Inline SVG rather than an <img>: no extra request, and no image bytes for a
+     shared cache or proxy to hold on to. {% endcomment %}
+  <div class="qr">{{ qr_svg|safe }}</div>
+
+  <details class="alt">
+    <summary>Can't scan the code?</summary>
+    <p>Enter this key into your app by hand:</p>
+    <p><code class="secret">{{ secret }}</code></p>
+  </details>
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% include "includes/form.html" %}
+    <button type="submit" class="primary">Confirm and continue</button>
+  </form>
+
+  <form method="post" action="{% url 'accounts:logout' %}" class="inline-form alt">
+    {% csrf_token %}
+    <button type="submit" class="link-button">Sign out instead</button>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% autoescape off %}Hello{% if recipient.first_name %} {{ recipient.first_name }}{% endif %},
+
+{% if from_staff %}Your counselor has sent you a message in bcTracker.{% else %}You have a new message in bcTracker.{% endif %}
+
+Nothing of it is repeated in this email. Sign in to read it:
+
+{{ url }}
+
+Messages are read between sessions rather than immediately. If something is
+urgent, or if you are in danger, please telephone rather than write.
+
+bcTracker
+{{ site_url }}
+{% endautoescape %}

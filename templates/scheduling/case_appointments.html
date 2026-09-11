@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% load scheduling_tags %}
+{% block title %}Appointments — {{ case.label }} — bcTracker{% endblock %}
+
+{% block content %}
+<h1>Appointments</h1>
+<p class="role"><a href="{% url 'counseling:case_detail' case.pk %}">{{ case.label }}</a></p>
+
+<div class="actions">
+  {% if can_schedule %}
+    <a class="button" href="{% url 'scheduling:schedule' case.pk %}">Schedule an appointment</a>
+  {% endif %}
+  {% if can_book %}
+    <a class="button" href="{% url 'scheduling:book' case.pk %}">Book a time</a>
+  {% endif %}
+</div>
+
+<h2>Coming up</h2>
+<table class="table">
+  <thead>
+    <tr><th>When</th><th>Who</th><th>Length</th><th>Status</th></tr>
+  </thead>
+  <tbody>
+    {% for booking in upcoming %}
+      <tr>
+        <td><a href="{% url 'scheduling:detail' booking.pk %}">{{ booking.starts_at|date:"D j M Y, g:i a" }}</a></td>
+        <td>{{ booking|attendee_label:request.user }}</td>
+        <td>{{ booking.duration_minutes }} min</td>
+        <td class="status status-{{ booking.status }}">{{ booking.get_status_display }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="4" class="empty">Nothing booked.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2>Sessions so far</h2>
+{% comment %} This is the table a financial administrator works from: when, who, how long, and
+   what became of it. No note appears here for anyone — the counselor reads those on
+   the appointment itself, behind scheduling.view_booking_note. {% endcomment %}
+<table class="table">
+  <thead>
+    <tr><th>When</th><th>Who</th><th>Length</th><th>Outcome</th></tr>
+  </thead>
+  <tbody>
+    {% for booking in past %}
+      <tr>
+        <td><a href="{% url 'scheduling:detail' booking.pk %}">{{ booking.starts_at|date:"D j M Y, g:i a" }}</a></td>
+        <td>{{ booking|attendee_label:request.user }}</td>
+        <td>{{ booking.duration_minutes }} min</td>
+        <td class="status status-{{ booking.status }}">
+          {{ booking.get_status_display }}
+          {% if booking.was_late_cancellation %}<span class="badge">late notice</span>{% endif %}
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="4" class="empty">No sessions yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

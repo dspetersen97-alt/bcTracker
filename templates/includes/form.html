@@ -1,0 +1,15 @@
+{% comment %} Shared form rendering. Kept in one place so every field gets its errors and
+   help text shown the same way, and so no form silently loses non-field errors. {% endcomment %}
+{% if form.non_field_errors %}
+  <ul class="errors" role="alert">
+    {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+  </ul>
+{% endif %}
+{% for field in form %}
+  <p class="field{% if field.errors %} field-invalid{% endif %}">
+    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+    {{ field }}
+    {% if field.help_text %}<span class="help">{{ field.help_text }}</span>{% endif %}
+    {% for error in field.errors %}<span class="error">{{ error }}</span>{% endfor %}
+  </p>
+{% endfor %}

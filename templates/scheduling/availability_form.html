@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}{{ heading }} — bcTracker{% endblock %}
+
+{% block content %}
+<h1>{{ heading }}</h1>
+<p class="muted">
+  Give the times in your own timezone. A 9am window is still 9am after the clocks
+  change, and counselees see it converted to theirs.
+</p>
+
+<form method="post" class="stacked">
+  {% csrf_token %}
+  {% include "includes/form.html" %}
+  <div class="actions">
+    <button type="submit">Save</button>
+    <a href="{% url 'scheduling:availability' %}">Cancel</a>
+  </div>
+</form>
+
+<p class="muted">
+  Overlapping windows are allowed — “9 to 12 in hour slots” and “1 to 2 for a longer
+  session” are two windows on the same day. A time that both windows offer appears
+  once.
+</p>
+{% endblock %}

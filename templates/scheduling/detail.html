@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% load scheduling_tags %}
+{% block title %}Appointment — bcTracker{% endblock %}
+
+{% block content %}
+<h1>{{ booking.starts_at|date:"l j F Y" }}</h1>
+<p class="role">
+  {{ booking.starts_at|time:"g:i a" }} – {{ booking.ends_at|time:"g:i a" }} ·
+  <span class="status status-{{ booking.status }}">{{ booking.get_status_display }}</span>
+</p>
+
+<dl class="detail-list">
+  <dt>Counselor</dt><dd>{{ booking.counselor.full_name }}</dd>
+  {# Not counselee.full_name: on a joint appointment that names another member. #}
+  <dt>For</dt><dd>{{ booking|attendee_label:request.user }}</dd>
+  <dt>Who is coming</dt><dd>{{ booking.get_attendance_display }}</dd>
+  <dt>Case</dt><dd><a href="{% url 'counseling:case_detail' booking.case_id %}">{{ booking.case.label }}</a></dd>
+  <dt>Length</dt><dd>{{ booking.duration_minutes }} minutes</dd>
+  {% if booking.status == 'cancelled' %}
+    <dt>Cancelled</dt>
+    <dd>
+      {{ booking.cancelled_at|date:"j M Y, g:i a" }}
+      {% if booking.was_late_cancellation %}<span class="badge">inside the notice period</span>{% endif %}
+    </dd>
+    {% if booking.cancellation_reason %}
+      <dt>Reason given</dt><dd>{{ booking.cancellation_reason }}</dd>
+    {% endif %}
+  {% endif %}
+</dl>
+
+{% if show_notes %}
+  {% comment %} Behind scheduling.view_booking_note, decided in the view. The counselee's own
+     words and the counselor's session note are both counseling content, and a
+     financial administrator reading this page sees neither block. {% endcomment %}
+  <div class="card">
+    <h2>Notes</h2>
+    {% if booking.request_note %}
+      <h3>What was asked</h3>
+      <p>{{ booking.request_note|linebreaksbr }}</p>
+    {% endif %}
+    {% if booking.counselor_note %}
+      <h3>Session note</h3>
+      <p>{{ booking.counselor_note|linebreaksbr }}</p>
+    {% else %}
+      <p class="muted">No session note yet.</p>
+    {% endif %}
+    {% if can_edit_note %}
+      {% comment %} Here rather than in the actions row below: this edits the note beside it,
+         not the appointment. Available before the session as well as after — the
+         outcome page is for closing one out, this is for keeping a record. {% endcomment %}
+      <div class="actions">
+        <a class="button" href="{% url 'scheduling:note' booking.pk %}">
+          {% if booking.counselor_note %}Edit the note{% else %}Write a note{% endif %}
+        </a>
+      </div>
+    {% endif %}
+  </div>
+{% endif %}
+
+<div class="actions">
+  {% if can_confirm and booking.status == 'requested' %}
+    <form method="post" action="{% url 'scheduling:confirm' booking.pk %}" class="inline-form">
+      {% csrf_token %}
+      <button type="submit">Confirm</button>
+    </form>
+  {% endif %}
+  {% if can_reschedule %}
+    <a class="button" href="{% url 'scheduling:reschedule' booking.pk %}">Move it</a>
+  {% endif %}
+  {% if can_record_outcome %}
+    <a class="button" href="{% url 'scheduling:outcome' booking.pk %}">Record what happened</a>
+  {% endif %}
+  {% if can_cancel %}
+    {% comment %} A confirmation page rather than a bare button: on a joint appointment this
+       affects other people, and a late cancellation may be billable. {% endcomment %}
+    <a class="button danger" href="{% url 'scheduling:cancel' booking.pk %}">Cancel</a>
+  {% endif %}
+</div>
+
+{% if late_if_cancelled and can_cancel %}
+  <p class="notice">
+    This appointment is close enough that cancelling now counts as short notice. Tell
+    your counselor anyway — they would much rather know than have you not arrive.
+  </p>
+{% endif %}
+{% endblock %}

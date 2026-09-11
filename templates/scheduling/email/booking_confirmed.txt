@@ -1,0 +1,17 @@
+{% autoescape off %}Hello{% if recipient.first_name %} {{ recipient.first_name }}{% endif %},
+
+Your appointment with {{ counselor_name }} is confirmed:
+
+  {{ when }} ({{ minutes }} minutes)
+{% if is_joint %}
+Everyone on the case is expected at this one.
+{% endif %}
+The details are here:
+
+{{ url }}
+
+If you need to change it, please let your counselor know as early as you can.
+
+bcTracker
+{{ site_url }}
+{% endautoescape %}

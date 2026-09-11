@@ -1,0 +1,45 @@
+# /etc/cron.d format: the sixth column is the user each job runs as.
+# Times are UTC, matching the container clock.
+#
+# Jobs are written as management commands so they can also be run by hand:
+#   docker compose exec web python manage.py send_appointment_reminders
+#
+# entrypoint.sh warns rather than failing if a command named here is missing, so
+# a typo in this file cannot stop the container from starting.
+
+SHELL=/bin/sh
+PATH=/usr/local/bin:/usr/bin:/bin
+
+# Appointment reminders, hourly. The command itself decides which bookings are
+# due a reminder and records that it sent one, so a missed or repeated run does
+# not double-send.
+0 * * * * bctracker cd /app && python manage.py send_appointment_reminders >> /proc/1/fd/1 2>&1
+
+# Push confirmed bookings to Google Calendar and refresh free/busy.
+*/15 * * * * bctracker cd /app && python manage.py sync_google_calendar >> /proc/1/fd/1 2>&1
+
+# Delete expired login links, expired session rows, and stale login-failure
+# records. Nothing still usable is ever removed — see the command's docstring.
+*/30 * * * * bctracker cd /app && python manage.py purge_expired_tokens >> /proc/1/fd/1 2>&1
+
+# One reminder per overdue invoice, at 09:20 UTC — a weekday morning in the
+# ministry's own timezone, not the middle of the night. Once per invoice and never
+# again: see the command's docstring for why this is not a dunning sequence.
+20 9 * * 1-5 bctracker cd /app && python manage.py send_invoice_reminders >> /proc/1/fd/1 2>&1
+
+# Nightly at 01:40, check unpaid invoices against Stripe and record any payment the
+# webhook missed. Exits immediately when Stripe is not configured. This is the net
+# under the webhook, and a payment system needs both — see the command's docstring.
+40 1 * * * bctracker cd /app && python manage.py reconcile_stripe >> /proc/1/fd/1 2>&1
+
+# Nightly encrypted backup at 02:15 UTC. It verifies what it wrote and prunes
+# what has aged out; writing to the backups volume is only half the job, and
+# getting that volume OFF this host is a separate, mandatory step — see
+# docs/restore-drill.md.
+15 2 * * * bctracker cd /app && python manage.py backup_database >> /proc/1/fd/1 2>&1
+
+# Sundays at 03:15, read the newest backup back again. The nightly run verifies
+# what it just wrote; this catches a file that has decayed on disk since, which is
+# the failure a restore discovers at the worst possible moment. A failure is
+# recorded in the audit trail, not only in this log.
+15 3 * * 0 bctracker cd /app && python manage.py decrypt_backup >> /proc/1/fd/1 2>&1

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Sign in — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>Sign in</h1>
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% include "includes/form.html" %}
+    {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+    <button type="submit" class="primary">Sign in</button>
+  </form>
+
+  {% if google_sso %}
+    {% comment %} Staff only, so it sits below the password form rather than above it: the
+       counselees using this page outnumber the staff, and Google is not for them. {% endcomment %}
+    <form method="post" action="{% url 'accounts:google_login' %}" class="alt">
+      {% csrf_token %}
+      <button type="submit">Ministry staff: sign in with Google</button>
+    </form>
+  {% endif %}
+
+  <p class="alt">
+    Counselees: you can also
+    <a href="{% url 'accounts:magic_link_request' %}">get a sign-in link by email</a>.
+  </p>
+</div>
+{% endblock %}

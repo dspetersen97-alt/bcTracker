@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Office hours — bcTracker{% endblock %}
+
+{% block content %}
+<h1>My office hours</h1>
+<p class="muted">
+  Times are in your own timezone ({{ window.zone }}), and stay there when the clocks
+  change. Counselees see them converted to theirs.
+</p>
+
+<div class="actions">
+  <a class="button" href="{% url 'scheduling:availability_add' %}">Add a weekly window</a>
+  <a class="button" href="{% url 'scheduling:override_add' %}">Add a closure or extra time</a>
+</div>
+
+{% comment %} The Google connection lives here rather than in account settings because it is
+   about this page: what it changes is which of these hours are actually offered. {% endcomment %}
+{% if google_available %}
+  <p class="muted">
+    {% if google %}
+      Connected to Google Calendar as {{ google.google_email }}.
+      <a href="{% url 'scheduling:google_settings' %}">Change</a>
+    {% else %}
+      <a href="{% url 'scheduling:google_settings' %}">Connect your Google Calendar</a>
+      to have appointments appear there, and to stop counselees being offered times
+      you are busy elsewhere.
+    {% endif %}
+  </p>
+{% endif %}
+
+<h2>Every week</h2>
+<table class="table">
+  <thead>
+    <tr><th>Day</th><th>From</th><th>To</th><th>Appointment length</th><th>In force</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for rule in rules %}
+      <tr>
+        <td>{{ rule.get_weekday_display }}</td>
+        <td>{{ rule.start_time|time:"g:i a" }}</td>
+        <td>{{ rule.end_time|time:"g:i a" }}</td>
+        <td>{{ rule.slot_minutes }} minutes</td>
+        <td>
+          {{ rule.effective_from|date:"j M Y" }}
+          {% if rule.effective_to %}– {{ rule.effective_to|date:"j M Y" }}{% else %}onwards{% endif %}
+        </td>
+        <td class="row-actions">
+          <a href="{% url 'scheduling:availability_edit' rule.pk %}">Edit</a>
+          <form method="post" action="{% url 'scheduling:availability_delete' rule.pk %}" class="inline-form">
+            {% csrf_token %}
+            <button type="submit" class="link-button danger">Remove</button>
+          </form>
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="6" class="empty">
+        No office hours yet, so nobody can book with you. Add a weekly window to start.
+      </td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2>Exceptions</h2>
+{% comment %} Only from today onwards. A list holding every holiday the ministry has ever
+   taken is a list nobody reads. {% endcomment %}
+<table class="table">
+  <thead>
+    <tr><th>Date</th><th>What</th><th>Reason</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for override in overrides %}
+      <tr>
+        <td>{{ override.date|date:"D j M Y" }}</td>
+        <td>
+          {% if override.is_all_day %}Closed all day
+          {% elif override.is_available %}Extra time {{ override.start_time|time:"g:i a" }}–{{ override.end_time|time:"g:i a" }}
+          {% else %}Closed {{ override.start_time|time:"g:i a" }}–{{ override.end_time|time:"g:i a" }}
+          {% endif %}
+        </td>
+        {% comment %} Shown only here, on the counselor's own page. It never reaches a booking
+           page, because "hospital" or a name would both be disclosures. {% endcomment %}
+        <td>{{ override.reason|default:"—" }}</td>
+        <td class="row-actions">
+          <form method="post" action="{% url 'scheduling:override_delete' override.pk %}" class="inline-form">
+            {% csrf_token %}
+            <button type="submit" class="link-button danger">Remove</button>
+          </form>
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="4" class="empty">Nothing coming up.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div class="card">
+  <h2>How booking works for you</h2>
+  <dl class="detail-list">
+    <dt>Notice required</dt><dd>{{ window.notice_hours }} hours</dd>
+    <dt>Counselees may book up to</dt><dd>{{ window.horizon_days }} days ahead</dd>
+    <dt>Default appointment</dt><dd>{{ window.session_minutes }} minutes</dd>
+  </dl>
+  <p><a href="{% url 'counseling:counselor_profile_edit' %}">Change these in practice settings</a></p>
+</div>
+{% endblock %}

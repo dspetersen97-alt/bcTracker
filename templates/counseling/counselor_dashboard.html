@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}My caseload — bcTracker{% endblock %}
+
+{% block content %}
+<h1>My caseload</h1>
+
+{% if not profile %}
+  <div class="card notice">
+    <p>Your practice settings have not been filled in yet. Counselees cannot book
+      until they know your session length and how much notice you need.</p>
+    <div class="actions"><a class="button" href="{% url 'counseling:counselor_profile_edit' %}">Set them up</a></div>
+  </div>
+{% endif %}
+
+<h2>Active cases</h2>
+{% if active_cases %}
+  <table class="table">
+    <thead><tr><th>Case</th><th>Counselees</th><th>Opened</th></tr></thead>
+    <tbody>
+      {% for case in active_cases %}
+        <tr>
+          <td><a href="{% url 'counseling:case_detail' case.pk %}">{{ case.label }}</a>
+            <span class="muted">{{ case.get_kind_display }}</span></td>
+          <td>
+            {% for member in case.members.all %}{% if not member.ended_on %}{{ member.counselee.full_name }}{% if not forloop.last %}, {% endif %}{% endif %}{% empty %}<span class="muted">Nobody added yet</span>{% endfor %}
+          </td>
+          <td>{{ case.opened_on }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p class="empty">You have no active cases. An administrator assigns them.</p>
+{% endif %}
+
+{% if other_cases %}
+  <h2>On hold and closed</h2>
+  <ul class="plain-list">
+    {% for case in other_cases %}
+      <li><a href="{% url 'counseling:case_detail' case.pk %}">{{ case.label }}</a>
+        — {{ case.get_status_display|lower }}{% if case.closed_on %} {{ case.closed_on }}{% endif %}</li>
+    {% endfor %}
+  </ul>
+{% endif %}
+{% endblock %}

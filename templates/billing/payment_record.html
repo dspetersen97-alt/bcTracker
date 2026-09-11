@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Record a payment — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>Record a payment</h1>
+  <p class="role">Invoice
+    <a href="{% url 'billing:invoice_detail' invoice.pk %}">{{ invoice.number }}</a> ·
+    {{ invoice.counselee.full_name }}</p>
+
+  <dl class="detail-list">
+    <dt>Invoice total</dt><dd>{{ invoice.display_total }}</dd>
+    <dt>Already paid</dt><dd>{{ invoice.display_paid }}</dd>
+    <dt>Outstanding</dt><dd>{{ invoice.display_balance }}</dd>
+  </dl>
+
+  <form method="post">
+    {% csrf_token %}
+    {% include "includes/form.html" %}
+    <button type="submit">Record it</button>
+    <a href="{% url 'billing:invoice_detail' invoice.pk %}">Cancel</a>
+  </form>
+
+  {% comment %} Said on the page as well as enforced in PaymentForm, which leaves CARD out
+     of the choices: a card payment is Stripe's to report, and a hand-entered one would
+     be money in the books that no processor ever saw. {% endcomment %}
+  <p class="muted">Cash, a check, or a transfer only. Card payments record themselves
+    when Stripe confirms them — there is nothing to enter here for one.</p>
+  <p class="muted">Recording more than is outstanding is allowed: a payer who has
+    rounded up or paid twice leaves a credit, which is a conversation, not an error to
+    hide. No receipt email is sent for a payment entered here.</p>
+</div>
+{% endblock %}

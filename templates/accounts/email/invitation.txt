@@ -1,0 +1,15 @@
+{% autoescape off %}Hello{% if user.first_name %} {{ user.first_name }}{% endif %},
+
+An account has been created for you on bcTracker, the counseling ministry's
+secure portal. Use this link to choose your password:
+
+{{ url }}
+
+It works once, and expires at {{ expires_at }} UTC. If it has expired by the
+time you get to it, ask whoever set up your account to send another.
+
+Please do not forward this email.
+
+bcTracker
+{{ site_url }}
+{% endautoescape %}

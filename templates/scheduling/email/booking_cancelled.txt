@@ -1,0 +1,16 @@
+{% autoescape off %}Hello{% if recipient.first_name %} {{ recipient.first_name }}{% endif %},
+
+This appointment has been cancelled:
+
+  {{ when }}
+{% if cancelled_by_staff %}
+Your counselor cancelled it. They will be in touch about another time, or you can
+book one yourself.
+{% else %}
+It was cancelled from the counselee's side. That time is free again.
+{% endif %}
+{{ url }}
+
+bcTracker
+{{ site_url }}
+{% endautoescape %}

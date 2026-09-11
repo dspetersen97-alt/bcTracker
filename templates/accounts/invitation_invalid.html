@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}That invitation has expired — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>That invitation has expired</h1>
+  <p>Invitations can only be used once, and they expire. Ask the person who set
+     up your account to send you a new one.</p>
+  <p><a href="{% url 'accounts:login' %}">Back to sign in</a></p>
+</div>
+{% endblock %}

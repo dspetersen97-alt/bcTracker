@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Cases — bcTracker{% endblock %}
+
+{% block content %}
+<h1>Cases</h1>
+
+<form method="get" class="filter-form">
+  <label for="status">Status</label>
+  <select name="status" id="status">
+    <option value="">All</option>
+    {% for value, label in statuses %}
+      <option value="{{ value }}" {% if value == selected_status %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit">Filter</button>
+</form>
+
+{% if can_add %}
+  <div class="actions"><a class="button" href="{% url 'counseling:case_create' %}">Open a case</a></div>
+{% endif %}
+
+<table class="table">
+  <thead><tr><th>Case</th><th>Counselor</th><th>Counselees</th><th>Status</th><th>Opened</th></tr></thead>
+  <tbody>
+    {% for case in cases %}
+      <tr>
+        <td><a href="{% url 'counseling:case_detail' case.pk %}">{{ case.label }}</a></td>
+        <td>{{ case.counselor.full_name }}</td>
+        <td>{{ case.member_count }}</td>
+        <td>{{ case.get_status_display }}</td>
+        <td>{{ case.opened_on }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="5" class="empty">No cases match.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

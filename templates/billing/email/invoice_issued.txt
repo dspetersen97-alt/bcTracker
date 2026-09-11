@@ -1,0 +1,25 @@
+{% autoescape off %}Hello{% if recipient.first_name %} {{ recipient.first_name }}{% endif %},
+
+An invoice has been raised on your account.
+
+  Invoice {{ number }}
+  Amount:  {{ total }}{% if due_on %}
+  Due by:  {{ due_on }}{% endif %}
+
+You can see it, and what it is made up of, here:
+
+{{ url }}
+{% if can_pay_by_card %}
+You can pay by card from that page. Card details are entered on our payment
+provider's own page and never reach bcTracker. If you would rather pay by cash,
+check, or transfer, speak to the office.
+{% else %}
+To pay, speak to the office. Please do not send card details by email.
+{% endif %}
+If anything on this invoice looks wrong, say so — it can be withdrawn and a
+corrected one raised. And if paying it is a difficulty, please tell us; that is a
+conversation we would rather have than not.
+
+bcTracker
+{{ site_url }}
+{% endautoescape %}

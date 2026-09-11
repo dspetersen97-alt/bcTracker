@@ -1,0 +1,15 @@
+{% autoescape off %}Hello{% if recipient.first_name %} {{ recipient.first_name }}{% endif %},
+
+An appointment has been moved.
+
+  Was: {{ previously }}
+  Now: {{ when }} ({{ minutes }} minutes)
+
+Please make a note of the new time — this replaces any reminder you have already
+had.
+
+{{ url }}
+
+bcTracker
+{{ site_url }}
+{% endautoescape %}

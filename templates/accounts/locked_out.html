@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Too many attempts — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>Too many sign-in attempts</h1>
+  {% comment %} Says nothing about whether that address has an account here, and nothing
+     about how many attempts are allowed. Both would make five requests into a
+     way of finding out who is being counseled. {% endcomment %}
+  <p>Sign-in from this device has been paused for
+     {{ cooloff_minutes }} minute{{ cooloff_minutes|pluralize }}. Nothing is
+     wrong with your account, and no action is needed — try again after that.</p>
+  <p class="alt">If you have forgotten your password, your counselor can send you
+     a new invitation. Counselees can also
+     <a href="{% url 'accounts:magic_link_request' %}">sign in by email link</a>
+     instead.</p>
+</div>
+{% endblock %}

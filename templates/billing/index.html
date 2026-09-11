@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% load billing_tags %}
+{% block title %}Billing — bcTracker{% endblock %}
+
+{% block content %}
+<h1>Billing</h1>
+<p class="role">Sessions waiting to be invoiced, and what the ministry is owed.</p>
+
+{% comment %} Second of the three lists, but shown first, and on purpose: a session with no
+   fee on it is absent from every total on this page. Without somewhere that says so,
+   the quietest way for a ministry to stop charging for its counseling is for nobody
+   to have set up the fee schedule. {% endcomment %}
+{% if unpriced %}
+  <div class="card">
+    <h2>Sessions with no fee set</h2>
+    <p class="notice">These were recorded when the fee schedule had nothing to say
+      about them, so they are not being charged for. Set a rate on the
+      <a href="{% url 'billing:fees' %}">fee schedule</a> for future sessions, and
+      correct these here.</p>
+    <table class="table">
+      <thead><tr><th>When</th><th>Who</th><th>What</th><th>Reason</th><th></th></tr></thead>
+      <tbody>
+        {% for session in unpriced %}
+          <tr>
+            <td>{{ session.occurred_on }}</td>
+            <td>{{ session.counselee.full_name }}</td>
+            <td>{{ session.get_kind_display }}</td>
+            <td class="muted">{{ session.waived_reason }}</td>
+            <td class="row-actions">
+              <a href="{% url 'billing:session_amend' session.pk %}">Set a fee</a>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+
+<h2>Waiting to be invoiced</h2>
+{% comment %} Grouped by case *and* person, because an invoice is addressed to one payer:
+   on a couple's case each spouse gets their own. See services.uninvoiced_work. {% endcomment %}
+{% for group in uninvoiced %}
+  <div class="card">
+    <h3>{{ group.counselee.full_name }}</h3>
+    <p class="role">{{ group.case.label }} · {{ group.case.counselor.full_name }}</p>
+    <table class="table">
+      <thead><tr><th>When</th><th>What</th><th>Fee</th></tr></thead>
+      <tbody>
+        {% for session in group.sessions %}
+          <tr>
+            <td>{{ session.occurred_on }}</td>
+            <td>{{ session.get_kind_display }}
+              <a class="muted" href="{% url 'billing:session_amend' session.pk %}">correct</a></td>
+            <td class="amount">{{ session.display_fee }}</td>
+          </tr>
+        {% endfor %}
+        <tr class="total-row">
+          <td colspan="2">{{ group.sessions|length }} session(s)</td>
+          <td class="amount">{{ group.total_cents|cents }}</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="actions">
+      <a class="button" href="{% url 'billing:invoice_create' group.case.pk %}">Raise an invoice</a>
+      <a href="{% url 'billing:case_invoices' group.case.pk %}">This case's invoices</a>
+    </div>
+  </div>
+{% empty %}
+  <p class="empty">Nothing is waiting. Every session held has been invoiced.</p>
+{% endfor %}
+
+<h2>Outstanding</h2>
+<table class="table">
+  <thead>
+    <tr><th>Invoice</th><th>Who</th><th>Case</th><th>Due</th><th>Balance</th></tr>
+  </thead>
+  <tbody>
+    {% for invoice in outstanding %}
+      <tr>
+        <td><a href="{% url 'billing:invoice_detail' invoice.pk %}">{{ invoice.number }}</a></td>
+        <td>{{ invoice.counselee.full_name }}</td>
+        <td>{{ invoice.case.label }}</td>
+        <td>{{ invoice.due_on }}
+          {% if invoice.is_overdue %}<span class="badge">overdue</span>{% endif %}</td>
+        <td class="amount">{{ invoice.display_balance }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="5" class="empty">Nothing outstanding.</td></tr>
+    {% endfor %}
+  </tbody>
+  {% if outstanding %}
+    <tfoot>
+      <tr class="total-row">
+        <td colspan="4">Owed to the ministry</td>
+        <td class="amount">{{ outstanding_cents|cents }}</td>
+      </tr>
+    </tfoot>
+  {% endif %}
+</table>
+
+<div class="actions">
+  <a class="button" href="{% url 'billing:fees' %}">Fee schedule</a>
+  <a href="{% url 'counseling:caseload_index' %}">Caseloads</a>
+</div>
+{% endblock %}

@@ -1,0 +1,13 @@
+# Local development only. Publishes Postgres to the host so the app and the test
+# suite can run outside a container for fast reloads.
+#
+# This is deliberately NOT named docker-compose.override.yml: compose loads an
+# override file automatically, so a committed one would follow the repo to the
+# production host and quietly expose the database there. Using it requires an
+# explicit -f, which is what `make dev-db` and `make test-db` do.
+
+services:
+  db:
+    ports:
+      # Bound to the loopback interface only — not reachable from the LAN.
+      - "127.0.0.1:5432:5432"
