@@ -503,8 +503,7 @@ def counselee_detail(request, pk):
     session_notes = [
         session
         for session in past_sessions
-        if session.counselor_note
-        and request.user.has_perm("scheduling.view_booking_note", session)
+        if session.counselor_note and request.user.has_perm("scheduling.view_booking_note", session)
     ]
 
     record(

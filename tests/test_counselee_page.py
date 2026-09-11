@@ -146,9 +146,7 @@ class TestWhatTheCounselorSees:
 
         assert reverse("scheduling:detail", args=[booking.pk]) in body
 
-    def test_their_own_session_notes(
-        self, client, sign_in, counselor, marriage, ada, make_booking
-    ):
+    def test_their_own_session_notes(self, client, sign_in, counselor, marriage, ada, make_booking):
         session = make_booking(marriage, ada, days=-7)
         session.counselor_note = "Worked through the second worksheet."
         session.save(update_fields=["counselor_note", "updated_at"])
@@ -163,9 +161,7 @@ class TestWhatTheCounselorSees:
 
         assert "Communication after a long illness." in page_for(client, ada).content.decode()
 
-    def test_looking_at_somebodys_file_is_recorded(
-        self, client, sign_in, counselor, marriage, ada
-    ):
+    def test_looking_at_somebodys_file_is_recorded(self, client, sign_in, counselor, marriage, ada):
         """The question an access review asks is who read whose file.
 
         A page that gathers the record in one place is the clearest possible answer
@@ -252,9 +248,7 @@ class TestWhoCanOpenIt:
 
         assert page_for(client, ada).status_code == 403
 
-    def test_a_counselee_cannot_open_their_own_this_way(
-        self, client, sign_in, marriage, ada
-    ):
+    def test_a_counselee_cannot_open_their_own_this_way(self, client, sign_in, marriage, ada):
         """Their own version of this page is their dashboard. A route keyed on a
         person's id is an invitation to try somebody else's."""
         sign_in(ada)
@@ -266,9 +260,7 @@ class TestWhoCanOpenIt:
     ):
         """Counseling that has finished is still the counselor's record of it, and
         the case page keeps ended memberships for the same reason."""
-        CaseMember.objects.filter(case=marriage, counselee=ada).update(
-            ended_on=marriage.opened_on
-        )
+        CaseMember.objects.filter(case=marriage, counselee=ada).update(ended_on=marriage.opened_on)
         sign_in(counselor)
 
         assert page_for(client, ada).status_code == 200
@@ -289,9 +281,7 @@ class TestItIsReachableByClicking:
 
         assert reverse("counseling:counselee_detail", args=[ada.pk]) in body
 
-    def test_billing_is_not_offered_the_link(
-        self, client, sign_in, financial_admin, marriage, ada
-    ):
+    def test_billing_is_not_offered_the_link(self, client, sign_in, financial_admin, marriage, ada):
         """Billing reads the case page for the roster. A link to a page that would
         refuse them is worse than no link, and the page it leads to is the whole
         counseling record."""

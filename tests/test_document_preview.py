@@ -94,7 +94,8 @@ class TestWhatMayBeShownInline:
         """Belt and braces. The stored type was sniffed at upload and is sound, so
         this can only fail on a row that was written by something other than the
         ingest pipeline — which is exactly when a second check is worth having."""
-        assert may_be_shown_inline("image/png", b"<svg xmlns='http://www.w3.org/2000/svg'>") is False
+        svg = b"<svg xmlns='http://www.w3.org/2000/svg'>"
+        assert may_be_shown_inline("image/png", svg) is False
         assert may_be_shown_inline("application/pdf", b"\x89PNG\r\n\x1a\n") is False
 
     def test_binary_claiming_to_be_text_is_refused(self):
@@ -156,9 +157,7 @@ class TestTheResponse:
 
         assert "sandbox" not in response["Content-Security-Policy"]
 
-    def test_text_is_given_an_encoding_rather_than_a_guess(
-        self, client, sign_in, counselee, store
-    ):
+    def test_text_is_given_an_encoding_rather_than_a_guess(self, client, sign_in, counselee, store):
         document = store(name="notes.txt", data="what we talked about — briefly".encode())
         sign_in(counselee)
 
@@ -216,9 +215,7 @@ class TestItIsTheSameDisclosureAsADownload:
 
         assert client.get(preview_url(document)).status_code == 404
 
-    def test_the_bookkeeper_cannot_open_it_either(
-        self, client, sign_in, financial_admin, store
-    ):
+    def test_the_bookkeeper_cannot_open_it_either(self, client, sign_in, financial_admin, store):
         document = store()
         sign_in(financial_admin)
 

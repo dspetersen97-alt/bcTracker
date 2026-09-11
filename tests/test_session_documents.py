@@ -193,9 +193,7 @@ class TestTheLinkIsNotARoute:
 
         assert Document.objects.get().booking_id is None
 
-    def test_a_meaningless_id_loses_the_link_and_keeps_the_file(
-        self, client, sign_in, couple_case
-    ):
+    def test_a_meaningless_id_loses_the_link_and_keeps_the_file(self, client, sign_in, couple_case):
         case, ada, _ben = couple_case
         sign_in(ada)
 
