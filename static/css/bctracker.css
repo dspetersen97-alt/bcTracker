@@ -353,6 +353,22 @@ summary:focus-visible {
   margin: 0.25rem 0;
 }
 
+/* An option that belongs to one role only. On the "Add a person" page the emailed
+   sign-in link applies to counselees and to nobody else, so the checkbox is taken off
+   the page unless "Counselee" is the role checked. This is the whole reason that page
+   asks for the role with radio buttons: with no JavaScript in this application, CSS is
+   the only thing that can react to a choice being made, and it can see :checked on a
+   radio while a <select>'s value is invisible to it.
+
+   Written as :not(:has(counselee:checked)) rather than four rules for the staff roles,
+   so a fifth role added later is hidden by default — the safe direction. A browser too
+   old for :has() shows the checkbox for every role, which is untidy and not unsafe:
+   UserCreateForm.clean() forces the value off for staff and a database constraint
+   stands behind that. */
+.role-form:not(:has(input[name="role"][value="counselee"]:checked)) .field:has(#id_allow_magic_link) {
+  display: none;
+}
+
 .help { font-size: 0.85rem; color: var(--ink-soft); }
 
 .error, .errors {

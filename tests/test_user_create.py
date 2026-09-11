@@ -13,13 +13,18 @@ true instead:
   * only ``accounts.manage_users`` — an administrator — may open or post to it,
     and a refusal is recorded;
   * a staff account can never be created with an emailed sign-in link, whatever is
-    posted;
+    posted, and the option is not even offered unless the role chosen is a
+    counselee's;
   * the profile row that makes the account usable is created with it;
   * nobody's password is set here, and an invitation that cannot be emailed is
     handed over on screen rather than raising.
 """
 
+import re
+from pathlib import Path
+
 import pytest
+from django.conf import settings
 from django.core import mail as django_mail
 from django.urls import reverse
 
@@ -31,6 +36,7 @@ from apps.counseling.models import CounseleeProfile, CounselorProfile
 pytestmark = pytest.mark.django_db
 
 URL = reverse("accounts:user_create")
+STYLESHEET = Path(settings.BASE_DIR) / "static" / "css" / "bctracker.css"
 
 
 def payload(**overrides):
@@ -131,6 +137,56 @@ class TestCreatingEachKindOfAccount:
 
         assert response.status_code == 302
         assert User.objects.get(email="ada@example.org").has_usable_password()
+
+
+class TestTheEmailedLinkOptionIsForCounseleesOnly:
+    """The option has to be unavailable for the other three roles, not merely ignored.
+
+    Forcing the value off on the way in is tested above and stays true. What is added
+    here is that an administrator creating a counselor is not asked the question in
+    the first place, which is done with a stylesheet rule keyed on a checked radio —
+    there is no JavaScript in this application to do it any other way. That makes the
+    hook the rule keys on part of the contract between three files, so it is tested
+    like one: rename the class or the widget and this fails, rather than the checkbox
+    quietly coming back for every role.
+    """
+
+    def test_the_role_is_asked_with_radio_buttons(self, client, sign_in, admin_user):
+        """A ``<select>``'s value is invisible to CSS. A dropdown here would leave
+        nothing in the page able to notice the choice changing."""
+        sign_in(admin_user)
+
+        page = client.get(URL).content.decode()
+
+        assert 'type="radio"' in page
+        for role in Role.values:
+            assert f'value="{role}"' in page, role
+
+    def test_the_page_and_the_stylesheet_agree_on_the_hook(self, client, sign_in, admin_user):
+        sign_in(admin_user)
+        page = client.get(URL).content.decode()
+
+        assert "role-form" in page
+        assert 'id="id_allow_magic_link"' in page
+        rule = re.search(
+            r"\.role-form:not\(:has\((?P<checked>[^)]+)\)\)\s*(?P<target>\S+)\s*\{(?P<body>[^}]*)\}",
+            STYLESHEET.read_text(),
+        )
+        assert rule, "the stylesheet no longer takes the option off the page for staff roles"
+        assert rule["checked"] == 'input[name="role"][value="counselee"]:checked'
+        assert "#id_allow_magic_link" in rule["target"]
+        assert "display: none" in rule["body"]
+
+    def test_a_counselee_created_from_a_case_is_still_offered_it(self, client, sign_in, admin_user):
+        """That page has no role question at all — it only ever makes counselees — so
+        a rule written without ``.role-form`` in front of it would hide the option on
+        the one path where it always applies."""
+        sign_in(admin_user)
+
+        page = client.get(reverse("counseling:counselee_create")).content.decode()
+
+        assert 'id="id_allow_magic_link"' in page
+        assert "role-form" not in page
 
 
 class TestWhenMailIsNotWorking:

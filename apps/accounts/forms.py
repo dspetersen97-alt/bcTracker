@@ -123,7 +123,8 @@ class UserCreateForm(forms.Form):
       * the role decides whether a second factor is compulsory (staff) and whether
         an emailed sign-in link is even offered (counselees only — a mailbox is a
         weaker factor than a password plus TOTP, and the database refuses a staff
-        account with one, so the checkbox is forced off rather than left to fail);
+        account with one, so the checkbox is hidden the moment a staff role is
+        picked and forced off in ``clean()`` rather than left to fail);
       * the role decides which profile row is created alongside the account, so
         that a counselor invited today already has a practice to configure and a
         counselee already has an intake form to fill in;
@@ -148,6 +149,15 @@ class UserCreateForm(forms.Form):
         choices=Role.choices,
         initial=Role.COUNSELEE,
         label=_("Role"),
+        # Radio buttons, not a dropdown, and the reason is the emailed sign-in link
+        # below. That option applies to counselees and to nobody else, so the page
+        # should stop offering it the moment a staff role is picked — and with no
+        # JavaScript anywhere, the only thing that can notice a choice changing is
+        # CSS, which can see ``:checked`` on a radio and cannot see the value of a
+        # ``<select>`` at all. The rule lives beside ``.role-form`` in
+        # static/css/bctracker.css; ``clean()`` below forces the value off
+        # regardless, so a browser that ignores the rule is still safe.
+        widget=forms.RadioSelect,
         help_text=_(
             "Counselees can only see their own case. Counselors see the cases "
             "assigned to them. Administrators see everything except payment card "
@@ -190,11 +200,12 @@ class UserCreateForm(forms.Form):
     def clean(self):
         cleaned = super().clean()
         if self.chosen_role() in {role.value for role in STAFF_ROLES}:
-            # Forced off rather than rejected: the box is ticked by default because
-            # most accounts created here are counselees, and an administrator who
-            # picks "Counselor" should not have to notice a checkbox that does not
-            # apply. Forcing it *off* is the safe direction, and the database
-            # constraint stands behind this either way.
+            # Forced off rather than rejected. The box is ticked by default and the
+            # stylesheet takes it off the page as soon as a staff role is picked, so
+            # what arrives here for a counselor is a value nobody chose — refusing
+            # the whole form over it would be blaming an administrator for a
+            # checkbox they never saw. Forcing it *off* is the safe direction, and
+            # the database constraint stands behind this either way.
             cleaned["allow_magic_link"] = False
         return cleaned
 
