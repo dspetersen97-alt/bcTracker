@@ -14,9 +14,12 @@ and the value that matters is the one the deployed stack actually uses.
 
 import base64
 import importlib
+import os
 import re
+import secrets
 import shutil
 import subprocess
+import sys
 from pathlib import Path, PurePosixPath
 
 import pytest
@@ -28,6 +31,7 @@ COMPOSE_FILE = BASE / "docker-compose.yml"
 RENDER_ENV = BASE / "compose" / "cron" / "render-env.sh"
 BOOTSTRAP = BASE / "scripts" / "bootstrap.sh"
 CADDYFILE = BASE / "compose" / "caddy" / "Caddyfile"
+WEB_ENTRYPOINT = BASE / "compose" / "web" / "entrypoint.sh"
 ENV_EXAMPLE = BASE / ".env.example"
 MAKEFILE = BASE / "Makefile"
 
@@ -109,6 +113,94 @@ class TestTheContainerCanPassItsOwnHealthcheck:
         response = client.get(path, headers={"host": host})
 
         assert response.status_code == 200
+
+
+def deploy_gate():
+    """The check command the web entrypoint runs, read out of the entrypoint itself.
+
+    Parsed rather than written out here so the test cannot come to be about a
+    command nobody runs. If the flags are ever softened, the assertions below start
+    describing the softer gate — which is why one of them is about the flags.
+    """
+    match = re.search(r"^python (manage\.py check [^\n]*)$", WEB_ENTRYPOINT.read_text(), re.M)
+    assert match, "compose/web/entrypoint.sh no longer runs a deployment check before serving"
+    return match[1].split()
+
+
+def production_environment():
+    """A plausible deployed environment, as .github/workflows/ci.yml sets one up.
+
+    Every value here is a secret or a hostname, and none of them is what the gate is
+    about — they exist so that the checks which are about them pass, leaving the
+    security warnings as the only thing that can fail. The two postgres binaries are
+    pointed at this interpreter because ``backups`` only asks whether the path names
+    an executable, and a developer's laptop is not required to have postgres
+    installed for a Django settings module to be worth checking.
+    """
+    return os.environ | {
+        "DJANGO_SETTINGS_MODULE": "config.settings.prod",
+        "DJANGO_SECRET_KEY": secrets.token_urlsafe(48),
+        "DJANGO_ALLOWED_HOSTS": "counseling.example.org",
+        "DJANGO_CSRF_TRUSTED_ORIGINS": "https://counseling.example.org",
+        "SECURE_HSTS_SECONDS": "31536000",
+        "BCTRACKER_MASTER_KEY": base64.b64encode(secrets.token_bytes(32)).decode(),
+        "PG_DUMP_PATH": sys.executable,
+        "PG_RESTORE_PATH": sys.executable,
+    }
+
+
+class TestTheGateTheEntrypointRunsBeforeServing:
+    """The one that was missing, and cost a deployment.
+
+    ``compose/web/entrypoint.sh`` runs ``check --deploy --fail-level WARNING`` after
+    migrating and before gunicorn, so a single deploy *warning* is not advice — it is
+    a container that boots, applies migrations, prints one WARNING line and exits 1,
+    forever. That is what happened when X_FRAME_OPTIONS became SAMEORIGIN so a PDF
+    could be shown in a frame of our own preview route: the whole suite was green,
+    because pytest runs under the test settings and never runs this gate at all.
+
+    CI runs it, which would have caught it a few minutes later. This runs it here, in
+    the suite a change is written against, under the settings module the container
+    uses. The subprocess is the point: these checks read settings at import time, and
+    importing the production module into a running test process would leave the rest
+    of the suite configured for production.
+    """
+
+    def test_the_flags_are_still_the_strict_ones(self):
+        """The assertion below is only worth anything while the gate is this strict —
+        drop ``--fail-level WARNING`` and it passes on a container that would refuse
+        to serve for a different reason."""
+        command = deploy_gate()
+
+        assert "--deploy" in command
+        assert ["--fail-level", "WARNING"] == command[-2:]
+
+    def test_the_production_settings_pass_it(self):
+        completed = subprocess.run(  # noqa: S603 — manage.py from this repo, fixed argv
+            [sys.executable, *deploy_gate()],
+            cwd=BASE,
+            env=production_environment(),
+            capture_output=True,
+            text=True,
+        )
+
+        assert completed.returncode == 0, (
+            "the web container would not start:\n"
+            f"{completed.stdout}\n{completed.stderr}\n"
+            "Either fix the setting the check names, or — if the check is wrong about "
+            "this deployment — add its id to SILENCED_SYSTEM_CHECKS in "
+            "config/settings/prod.py with the reasoning written out."
+        )
+
+    def test_nothing_silenced_is_an_error(self, monkeypatch):
+        """Silencing is for a check that has weighed a trade-off and come out on the
+        other side, which is a judgment about a Warning. An ``E`` is the check saying
+        the deployment is broken — silencing one of those does not make it work, it
+        only moves the discovery of it to a counselor."""
+        for identifier in prod_settings(monkeypatch).SILENCED_SYSTEM_CHECKS:
+            assert not re.search(r"\.E\d+$", identifier), (
+                f"{identifier} is an error, and an error is not a judgment call"
+            )
 
 
 @pytest.mark.skipif(SHELL is None, reason="needs a POSIX shell to run the cron env script")

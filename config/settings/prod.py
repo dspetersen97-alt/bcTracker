@@ -55,4 +55,23 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 # left as a warning so that `check --deploy --fail-level WARNING` stays a
 # meaningful gate in the entrypoint and in CI.
 SECURE_HSTS_PRELOAD = False
-SILENCED_SYSTEM_CHECKS = ["security.W021"]
+
+# W021: preload is off, deliberately, just above.
+#
+# W019: X_FRAME_OPTIONS is SAMEORIGIN rather than DENY. The check says "unless
+# there is a good reason for your site to serve other parts of itself in a frame",
+# and this site has exactly one: the document page shows a PDF in a frame of its
+# own preview route instead of sending a counselor to a new tab, and X-Frame-Options
+# is enforced on the framed response. DENY there is an empty box.
+#
+# What the check is protecting against — somebody else's page framing ours to
+# collect a click meant for us — is still refused, by SAMEORIGIN and again by
+# ``frame-ancestors 'self'`` in CONTENT_SECURITY_POLICY. Both are asserted in
+# tests/test_security_headers.py, which is what makes silencing this honest rather
+# than convenient: relax either of them to allow another origin and that suite
+# fails, so this entry cannot quietly come to mean more than it says.
+#
+# Silenced rather than left as a warning because the entrypoint runs
+# `check --deploy --fail-level WARNING` before gunicorn starts. A warning nobody
+# can act on there is not a warning, it is a container that will not boot.
+SILENCED_SYSTEM_CHECKS = ["security.W019", "security.W021"]
