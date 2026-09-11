@@ -23,7 +23,9 @@ class DocumentUploadForm(forms.Form):
     file = forms.FileField(
         label=_("File"),
         widget=forms.ClearableFileInput(attrs={"accept": _accept_attribute()}),
-        help_text=_("PDF, Word, Excel, or a photo. Up to %(limit)s MB.")
+        # Word is named as being stored as a PDF because that is a surprise
+        # otherwise: the file in the list is not the file that was chosen.
+        help_text=_("PDF, Word (stored as PDF), Excel, a web page, or a photo. Up to %(limit)s MB.")
         % {"limit": settings.DOCUMENT_MAX_BYTES // 1024 // 1024},
     )
     title = forms.CharField(

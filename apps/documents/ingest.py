@@ -34,7 +34,7 @@ from uuid import UUID, uuid4
 
 from django.conf import settings
 
-from apps.documents import crypto, filetypes, images, scanning, storage
+from apps.documents import crypto, filetypes, images, scanning, storage, wordfiles
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +64,11 @@ class AcceptedUpload:
     scan_status: str
     scan_detail: str
     is_image: bool
+    #: The name the file arrived under, when what is being stored is no longer that
+    #: file — a Word document converted to a PDF. Empty for everything else. The
+    #: caller decides what to do with it; ``store_document`` puts it in the audit
+    #: trail, because "notes.pdf appeared" is a poor account of a .docx arriving.
+    converted_from: str = ""
 
     @property
     def byte_size(self) -> int:
@@ -78,7 +83,11 @@ def accept(upload, *, max_bytes=None, on_infected=None) -> AcceptedUpload:
         1. size          — before anything is read into memory
         2. type          — extension *and* signature must agree
         3. virus scan     — on the bytes as sent, not on what Pillow re-encoded
-        4. metadata strip — EXIF and GPS out of photos
+        4. normalise      — EXIF and GPS out of photos, Word files turned into PDFs
+
+    Step 4 is why this returns bytes rather than the upload: what is stored is not
+    always what arrived. A converted Word file comes back with a ``.pdf`` name, a
+    PDF content type, and the name it arrived under in ``converted_from``.
 
     ``on_infected`` is called with the ``InfectedFile`` before the refusal is
     raised, so each caller can record the rejection against whatever it considers
@@ -124,6 +133,8 @@ def accept(upload, *, max_bytes=None, on_infected=None) -> AcceptedUpload:
         raise UploadTooLarge("That file is larger than the limit.")
 
     content_type = file_kind.content_type
+    filename = (upload.name or "")[:255]
+    converted_from = ""
     if file_kind.is_image:
         try:
             data, content_type = images.strip_metadata(data, content_type=content_type)
@@ -132,15 +143,27 @@ def accept(upload, *, max_bytes=None, on_infected=None) -> AcceptedUpload:
             # pixels" and "cannot be decoded" are different problems, and only one
             # of them is worth trying again.
             raise UploadRejected(str(exc) or "That image could not be read.") from exc
+    elif file_kind.converts_to_pdf:
+        # A Word file is stored as the PDF it converts to. After the scan, never
+        # before: the scanner has to see the bytes that were actually sent, and a
+        # macro-laden .docx must be refused rather than quietly discarded by a
+        # conversion that only keeps the text.
+        try:
+            data, filename = wordfiles.convert(data, filename=filename)
+        except wordfiles.ConversionFailed as exc:
+            raise UploadRejected(str(exc)) from exc
+        converted_from = (upload.name or "")[:255]
+        content_type = "application/pdf"
 
     return AcceptedUpload(
         data=data,
-        filename=(upload.name or "")[:255],
+        filename=filename,
         content_type=content_type,
         sha256=hashlib.sha256(data).hexdigest(),
         scan_status=scan_result.status,
         scan_detail=scan_result.detail[:200],
         is_image=file_kind.is_image,
+        converted_from=converted_from,
     )
 
 

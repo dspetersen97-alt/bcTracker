@@ -137,6 +137,10 @@ def store_document(
                 visibility=document.visibility,
                 scan_status=document.scan_status,
                 booking_id=document.booking_id,
+                # Only when there was a conversion. A key that is empty on every
+                # other upload would be noise in every row of the trail, and this
+                # one is the answer to "where did the .docx I sent go".
+                **({"converted_from": accepted.converted_from} if accepted.converted_from else {}),
             )
     except BaseException:
         ingest.discard(written)

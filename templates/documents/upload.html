@@ -32,6 +32,11 @@
   </form>
 
   <p class="muted">Uploads are scanned and stored encrypted. PDFs, Word and Excel
-    files, plain text, and photos are accepted.</p>
+    files, saved web pages, plain text, and photos are accepted.</p>
+  {% comment %} Said plainly rather than left to be discovered from a file list: somebody
+     uploading a form with a diagram on it needs to know the diagram did not arrive. {% endcomment %}
+  <p class="muted">Word documents are converted to PDF so they can be read here without
+    downloading them. The text, headings, and tables come across; pictures and layout
+    do not, so send a PDF if how it looks matters.</p>
 </div>
 {% endblock %}

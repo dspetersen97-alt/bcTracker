@@ -53,6 +53,18 @@ DOCX = ooxml("word/document.xml")
 XLSX = ooxml("xl/workbook.xml")
 
 
+def word_document(text: str) -> bytes:
+    """A .docx with real WordprocessingML in it, so it can actually be converted.
+
+    ``DOCX`` above is enough to be *identified* as a Word file and no more, which is
+    all the tests around identification need. Built by the module that owns the
+    conversion rather than hand-rolled a second time here, where the two could drift.
+    """
+    from tests.test_word_to_pdf import docx, para
+
+    return docx(para(text))
+
+
 def upload(name: str, data: bytes):
     from django.core.files.uploadedfile import SimpleUploadedFile
 
@@ -109,6 +121,8 @@ class TestIdentifyingWhatWasUploaded:
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             ),
             ("notes.txt", b"Week one reflections.\n", "text/plain"),
+            ("devotional.html", b"<!doctype html><title>Day 1</title>", "text/html"),
+            ("saved-page.htm", b"<html><body>Day 1</body></html>", "text/html"),
         ],
     )
     def test_the_formats_a_ministry_actually_needs(self, name, data, content_type):
@@ -165,6 +179,76 @@ class TestIdentifyingWhatWasUploaded:
         filetypes.identify(handle, filename="intake.pdf")
 
         assert handle.read() == PDF
+
+
+# --- normalising ----------------------------------------------------------
+
+
+class TestWhatIsStoredIsNotAlwaysWhatArrived:
+    """``accept`` returns bytes rather than the upload, and this is why.
+
+    A photo is re-encoded to lose its EXIF (below) and a Word file is replaced by the
+    PDF it converts to, so that a counselor can read it in the page instead of
+    downloading a .docx and opening Word — which ends with a plaintext copy of a
+    counselee's disclosure in a Downloads folder.
+    """
+
+    def test_a_word_file_is_stored_as_a_pdf(self):
+        from apps.documents import ingest
+
+        accepted = ingest.accept(upload("Week one.docx", word_document("Homework.")))
+
+        assert accepted.content_type == "application/pdf"
+        assert accepted.filename == "Week one.pdf"
+        assert accepted.data.startswith(b"%PDF-")
+
+    def test_the_name_it_arrived_under_is_carried_along(self):
+        """So the audit trail can answer "where did the .docx I sent go"."""
+        from apps.documents import ingest
+
+        accepted = ingest.accept(upload("Week one.docx", word_document("Homework.")))
+
+        assert accepted.converted_from == "Week one.docx"
+
+    def test_the_checksum_is_of_the_pdf_that_was_stored(self):
+        """It identifies what a download will produce, which is the whole use of it."""
+        import hashlib
+
+        from apps.documents import ingest
+
+        accepted = ingest.accept(upload("w.docx", word_document("Homework.")))
+
+        assert accepted.sha256 == hashlib.sha256(accepted.data).hexdigest()
+
+    def test_a_word_file_that_cannot_be_converted_is_refused_with_a_way_forward(self):
+        from apps.documents import ingest
+
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as archive:
+            archive.writestr("word/document.xml", "<w:document/>")
+
+        with pytest.raises(ingest.UploadRejected, match="saving it again"):
+            ingest.accept(upload("broken.docx", buffer.getvalue()))
+
+    @pytest.mark.parametrize(
+        ("name", "data", "content_type"),
+        [
+            ("devotional.html", b"<!doctype html><p>Day 1</p>", "text/html"),
+            ("notes.txt", b"Week one.\n", "text/plain"),
+            ("intake.pdf", PDF, "application/pdf"),
+        ],
+    )
+    def test_everything_else_is_stored_as_itself(self, name, data, content_type):
+        """A saved web page in particular. It is accepted and it is never converted —
+        and it is never served inline either, which is a separate decision made in
+        apps/core/downloads.py and tested in tests/test_document_preview.py."""
+        from apps.documents import ingest
+
+        accepted = ingest.accept(upload(name, data))
+
+        assert accepted.content_type == content_type
+        assert accepted.data == data
+        assert accepted.converted_from == ""
 
 
 # --- scanning -------------------------------------------------------------

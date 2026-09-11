@@ -51,6 +51,14 @@ pillow==12.3.0
 # it over a socket, so nothing about virus definitions lives in this image.
 clamd==1.0.2
 
+# Turning an uploaded Word file into the PDF we store. Chosen over calling out to
+# LibreOffice, which converts with far more fidelity and costs about half a gigabyte
+# in the image, a subprocess handling a counselee's document, and a dependency the
+# test suite cannot rely on being present on a maintainer's Windows machine. What is
+# lost is layout, images, and styling; what is kept is the text, the headings, and
+# the tables — see apps/documents/wordfiles.py, which is explicit about the trade.
+reportlab==5.0.1
+
 # Google Calendar. Plain HTTP rather than google-api-python-client, which pulls
 # in a discovery-document layer and four more packages to reach the three
 # endpoints this needs (token, events, freeBusy). The OAuth refresh exchange is

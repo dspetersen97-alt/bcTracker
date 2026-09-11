@@ -180,8 +180,14 @@ class TestTheResponse:
     ):
         """Not a quiet fallback: a page that offers "View" and saves a file instead
         has told the user something untrue, and this route is never linked for a
-        type the allowlist refuses."""
-        document = store(name="records.docx", data=_docx_bytes())
+        type the allowlist refuses.
+
+        A saved web page is the sharp example, which is why it is the one used here.
+        It can be uploaded, and serving it inline from this origin would be running
+        somebody's HTML with a counselee's session attached — so text/html is
+        deliberately absent from INLINE_TYPES and this route has to refuse it.
+        """
+        document = store(name="devotional.html", data=b"<!doctype html><p>Day one</p>")
         sign_in(counselee)
 
         assert client.get(preview_url(document)).status_code == 404
@@ -251,7 +257,7 @@ class TestWhatThePageOffers:
         self, client, sign_in, counselee, store
     ):
         """A button that leads to a 404 is worse than no button."""
-        document = store(name="records.docx", data=_docx_bytes())
+        document = store(name="budget.xlsx", data=_xlsx_bytes())
         sign_in(counselee)
 
         page = client.get(reverse("documents:detail", args=[document.public_id])).content.decode()
@@ -259,12 +265,16 @@ class TestWhatThePageOffers:
         assert preview_url(document) not in page
 
 
-def _docx_bytes() -> bytes:
-    """The smallest thing the ingest pipeline will accept as a .docx."""
+def _xlsx_bytes() -> bytes:
+    """The smallest thing the ingest pipeline will accept as a spreadsheet.
+
+    A spreadsheet rather than a Word file, because a .docx no longer stays a .docx:
+    it is converted to a PDF on the way in, and a PDF is previewable.
+    """
     import io
     import zipfile
 
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
-        archive.writestr("word/document.xml", "<w:document/>")
+        archive.writestr("xl/workbook.xml", "<workbook/>")
     return buffer.getvalue()

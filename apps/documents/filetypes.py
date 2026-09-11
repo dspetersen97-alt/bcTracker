@@ -2,10 +2,15 @@
 What may be uploaded, and how we decide what a file actually is.
 
 Both halves matter. A counselee emailing in a homework sheet needs PDFs, Word
-files, and phone photos to work; nothing else has a reason to be here, and an
-extension allowlist alone is worthless because the extension is chosen by
-whoever uploads the file. So the extension must be allowed **and** the leading
-bytes must match a signature for that extension.
+files, saved web pages, and phone photos to work; nothing else has a reason to be
+here, and an extension allowlist alone is worthless because the extension is
+chosen by whoever uploads the file. So the extension must be allowed **and** the
+leading bytes must match a signature for that extension.
+
+Being accepted is not the same as being stored as itself. A Word file is converted
+to a PDF on the way in — ``converts_to_pdf`` below, and apps/documents/wordfiles.py
+for why — and a photo is re-encoded to drop its EXIF. This module only decides what
+a file *is*.
 
 Why a small signature table instead of libmagic
 -----------------------------------------------
@@ -45,6 +50,10 @@ class FileKind:
     #: Path that must exist inside the archive for an OOXML kind.
     ooxml_marker: str = ""
     is_image: bool = False
+    #: True for a format we store as a PDF instead of as itself. Only Word files:
+    #: see apps/documents/wordfiles.py for why they are converted and what that
+    #: costs. The conversion happens in ``ingest.accept``, after the virus scan.
+    converts_to_pdf: bool = False
 
 
 KINDS: tuple[FileKind, ...] = (
@@ -65,6 +74,7 @@ KINDS: tuple[FileKind, ...] = (
         (b"PK\x03\x04",),
         is_ooxml=True,
         ooxml_marker="word/document.xml",
+        converts_to_pdf=True,
     ),
     FileKind(
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -73,6 +83,15 @@ KINDS: tuple[FileKind, ...] = (
         is_ooxml=True,
         ooxml_marker="xl/workbook.xml",
     ),
+    # A saved web page — a devotional, an article, a form somebody printed to file.
+    # Accepted because people do send them, and stored as itself: converting it would
+    # need a browser engine, and there is nothing here that renders it. Note what does
+    # *not* follow from accepting it — text/html is deliberately absent from
+    # apps/core/downloads.py::INLINE_TYPES, so it is always handed over as a download
+    # and never served for a browser to run from this origin, with a counselee's
+    # session attached. Signature-free like .txt: HTML has no magic bytes, and a file
+    # that is text and claims to be HTML is at worst untidy.
+    FileKind("text/html", (".html", ".htm")),
     FileKind("text/plain", (".txt",)),
 )
 
