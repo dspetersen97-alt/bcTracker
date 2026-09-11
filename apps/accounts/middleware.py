@@ -32,6 +32,54 @@ MFA_EXEMPT_URL_NAMES = (
 LAST_SEEN_INTERVAL = timedelta(minutes=5)
 
 
+def _verification_check(user):
+    """``is_verified``, or a loud failure if the middleware order is wrong.
+
+    ``is_verified()`` is added to the user by django_otp's OTPMiddleware. If it is
+    missing, settings are misconfigured, and the safe reading of an absent
+    verification is "not verified" — never "allow". Raising says so where a
+    ``getattr(..., False)`` would silently gate nobody.
+    """
+    check = getattr(user, "is_verified", None)
+    if check is None:
+        raise RuntimeError(
+            "OTPMiddleware must run before MFAEnforcementMiddleware; "
+            "check MIDDLEWARE in config/settings/base.py."
+        )
+    return check
+
+
+def session_is_fully_authenticated(request) -> bool:
+    """Whether this session has cleared every gate, and not just the password.
+
+    The single answer to "is this person signed in", shared by the middleware below
+    and by the navigation the templates render — which is the point of it being a
+    function. A staff session between the password and the TOTP code is
+    authenticated as far as ``django.contrib.auth`` is concerned: ``request.user``
+    is set and ``is_authenticated`` is True, and it can still reach nothing but the
+    enrolment pages. Showing it the menu offers a way out of a room it is not out
+    of, and every link in that menu would bounce straight back to the code prompt.
+
+    Takes the request rather than the user, because "is this session signed in" is a
+    question about a request and asking it of a model instance is the mistake this
+    signature makes impossible.
+    """
+    user = getattr(request, "user", None)
+    if user is None or not user.is_authenticated:
+        return False
+    if not user.mfa_required:
+        return True
+
+    # Deliberately not _verification_check: this one is read while a template
+    # renders, and a template renders in places a request was assembled by hand and
+    # never passed through OTPMiddleware. An absent check still means "not
+    # verified", but here that hides a menu where raising would break a page. The
+    # middleware below is the half that would be failing to *gate*, so it is the
+    # half that shouts — and on a real request it runs first anyway.
+    verified = getattr(user, "is_verified", None)
+    return bool(verified and verified())
+
+
 class MFAEnforcementMiddleware:
     """Hold a session that owes a second factor at the enrolment step.
 
@@ -48,15 +96,7 @@ class MFAEnforcementMiddleware:
         if user is None or not user.is_authenticated or not user.mfa_required:
             return self.get_response(request)
 
-        # is_verified() is added by django_otp's OTPMiddleware. If it is missing,
-        # the middleware order in settings is wrong, and the safe reading of an
-        # absent verification is "not verified" — never "allow".
-        if getattr(user, "is_verified", None) is None:
-            raise RuntimeError(
-                "OTPMiddleware must run before MFAEnforcementMiddleware; "
-                "check MIDDLEWARE in config/settings/base.py."
-            )
-        if user.is_verified():
+        if _verification_check(user)():
             return self.get_response(request)
 
         if self._is_exempt(request.path):

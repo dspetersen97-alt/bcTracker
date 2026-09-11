@@ -209,10 +209,16 @@ class TestHowAToastLeaves:
 
     def test_less_motion_can_be_asked_for(self):
         """Reduced motion drops the slide and keeps the fade — a fade is not what
-        causes trouble, and dropping it would mean the toast never left."""
-        css = STYLESHEET.read_text(encoding="utf-8")
-        block = re.search(r"@media \(prefers-reduced-motion: reduce\) \{(.*?)\n\}", css, re.S)
+        causes trouble, and dropping it would mean the toast never left.
 
-        assert block, "the stylesheet does not answer prefers-reduced-motion"
-        assert ".toast" in block.group(1)
-        assert "translateX" not in block.group(1)
+        More than one block answers that query now: the sliding sidebar has its own,
+        which has to sit after the rules it overrides. So the toast's block is picked
+        out by what it mentions rather than by being the first one found.
+        """
+        css = STYLESHEET.read_text(encoding="utf-8")
+        blocks = re.findall(r"@media \(prefers-reduced-motion: reduce\) \{(.*?)\n\}", css, re.S)
+
+        assert blocks, "the stylesheet does not answer prefers-reduced-motion"
+        ours = [block for block in blocks if ".toast" in block]
+        assert ours, "nothing answers prefers-reduced-motion for the toasts"
+        assert "translateX" not in ours[0]

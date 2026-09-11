@@ -23,11 +23,17 @@
      from the keyboard entirely — and the <label> gives it its accessible name.
 
      Unchecked is the expanded state, so the hamburger shows an X: the icon names
-     the action on offer, not the state it is in. {% endcomment %}
-  {% if user.is_authenticated %}<input type="checkbox" id="nav-toggle" class="nav-toggle">{% endif %}
+     the action on offer, not the state it is in.
+
+     is_signed_in rather than user.is_authenticated, here and at the sidebar below:
+     a staff session that has given its password and not its TOTP code is
+     authenticated and is going nowhere but the code prompt, so a menu on that page
+     is a list of doors that all lead back to it. The answer is made once, in
+     apps/accounts/middleware.py, by the same function that does the holding. {% endcomment %}
+  {% if is_signed_in %}<input type="checkbox" id="nav-toggle" class="nav-toggle">{% endif %}
 
   <header class="site-header">
-    {% if user.is_authenticated %}
+    {% if is_signed_in %}
       <label class="nav-toggle-button" for="nav-toggle" title="Show or hide the menu">
         <span class="hamburger" aria-hidden="true"><span></span><span></span><span></span></span>
         <span class="visually-hidden">Show or hide the menu</span>
@@ -40,7 +46,7 @@
   </header>
 
   <div class="layout">
-    {% if user.is_authenticated %}
+    {% if is_signed_in %}
       {% comment %} Navigation is built from the role — see apps/core/navigation.py — and each
          link's page checks the permission again. Hiding a link is a courtesy,
          never the control. {% endcomment %}

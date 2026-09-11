@@ -19,9 +19,22 @@
   --ok: #2f6b3f;
   --warn: #9a6410;
   --radius: 6px;
+  /* The pinned header's height, named because three other things have to agree
+     with it: the sidebar sticks below it, the sidebar's phone overlay starts below
+     it, and the toast stack sits under it. A number typed out four times is four
+     numbers that drift. It matches what the header actually measures — 0.75rem of
+     padding either side of the 2.5rem menu button — and .site-header states it as a
+     minimum so the two cannot part company on a page with no menu button. */
+  --header-height: 4rem;
 }
 
 * { box-sizing: border-box; }
+
+/* The header is pinned, so anything scrolled to by an in-page link — Skip to
+   content, an anchor in a long page — would arrive underneath it. Offsetting every
+   such jump by the header's height is the whole fix, and it is one line rather than
+   a margin on each possible target. */
+html { scroll-padding-top: calc(var(--header-height) + 0.5rem); }
 
 body {
   margin: 0;
@@ -59,12 +72,24 @@ body {
 }
 
 /* The header carries the brand, the menu control and the signed-in address, and
-   nothing else. Everything that navigates is in the sidebar. */
+   nothing else. Everything that navigates is in the sidebar.
+
+   Pinned, so the menu button and the way home are reachable from the bottom of a
+   long case list without scrolling back up for them. sticky rather than fixed: a
+   fixed header is out of the flow and the first screenful of every page would have
+   to be padded out from under it, which is a second number to keep in step with the
+   first. z-index 8 puts it over the content and the phone overlay of the sidebar,
+   and under the toast stack (20) and the skip link (10) — a message about what just
+   happened, and the keyboard's way past the header, both outrank the header. */
 .site-header {
+  position: sticky;
+  top: 0;
+  z-index: 8;
   display: flex;
   align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
+  min-height: var(--header-height);
   padding: 0.75rem 1.25rem;
   background: var(--card);
   border-bottom: 1px solid var(--line);
@@ -161,14 +186,36 @@ body {
   background: var(--card);
   border-right: 1px solid var(--line);
   /* Sticks while the page scrolls, so a long case list still has the way out
-     visible. min-height rather than height: a short menu should not paint a
-     column of white down an otherwise empty page. */
+     visible — below the pinned header, which is what top says. min-height rather
+     than height: a short menu should not paint a column of white down an otherwise
+     empty page. max-height and the scrollbar are for the opposite case, a role with
+     more links than a short window has room for: the menu scrolls inside itself
+     rather than having its last entry cut off with no way to reach it. */
   position: sticky;
-  top: 0;
+  top: var(--header-height);
   min-height: 60vh;
+  max-height: calc(100vh - var(--header-height));
+  overflow-y: auto;
+  transition: transform 180ms ease, margin-left 180ms ease, visibility 0s;
 }
 
-.nav-toggle:checked ~ .layout > .sidebar { display: none; }
+/* Collapsed. It slides out and the content closes up behind it, rather than the
+   column vanishing between one frame and the next: the movement is what says the
+   menu went somewhere and can be brought back, where a disappearance reads as
+   something breaking. Two properties doing two jobs — the transform slides it, the
+   negative margin takes its 14rem out of the flex row so the content can have the
+   width — and they animate together.
+
+   visibility, not opacity: a menu nobody can see must not still be a row of tab
+   stops. It is delayed by the length of the slide on the way out so the thing being
+   hidden is off-screen by the time it goes, and flips back immediately on the way
+   in so there is something there to watch arrive. */
+.nav-toggle:checked ~ .layout > .sidebar {
+  margin-left: -14rem;
+  transform: translateX(-100%);
+  visibility: hidden;
+  transition: transform 180ms ease, margin-left 180ms ease, visibility 0s linear 180ms;
+}
 
 .nav-list {
   margin: 0;
@@ -219,17 +266,31 @@ main.wide { max-width: 68rem; }
    instead of sitting beside it — and it starts collapsed, which is what the
    unchecked-is-expanded default cannot express. Hence the reversed rules. */
 @media (max-width: 45rem) {
+  /* Fixed and below the pinned header, so the menu covers the content rather than
+     squeezing it, and stays put while the page behind it scrolls. Closed is the
+     default here — the reverse of the desktop rules — and it is the same slide,
+     off to the left. No negative margin: it is out of the flow already, so there
+     is no row to close up, and a margin-left would only move it again. */
   .sidebar {
     position: fixed;
-    top: 3.5rem;
+    top: var(--header-height);
     left: 0;
     bottom: 0;
     z-index: 5;
     width: 14rem;
+    max-height: none;
     overflow-y: auto;
-    display: none;
+    margin-left: 0;
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform 180ms ease, visibility 0s linear 180ms;
   }
-  .nav-toggle:checked ~ .layout > .sidebar { display: block; }
+  .nav-toggle:checked ~ .layout > .sidebar {
+    margin-left: 0;
+    transform: none;
+    visibility: visible;
+    transition: transform 180ms ease, visibility 0s;
+  }
   .nav-toggle:not(:checked) ~ .site-header .hamburger span:nth-child(1) {
     top: 0;
     margin-top: 0;
@@ -252,6 +313,19 @@ main.wide { max-width: 68rem; }
     margin-bottom: -1px;
     transform: rotate(-45deg);
   }
+}
+
+/* Asked for less movement: the menu is simply there or simply not, and the icon
+   changes without turning. The slide was saying "it went over there and can be
+   brought back", which is worth something and not worth making somebody unwell.
+
+   Last, after the phone rules above, because these selectors are no more specific
+   than the ones they are overriding — put earlier, the media query would hand the
+   transitions back on the smaller screen. */
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .nav-toggle:checked ~ .layout > .sidebar,
+  .hamburger span { transition: none; }
 }
 
 .card {
@@ -883,8 +957,9 @@ button.quiet:hover,
 .toasts {
   position: fixed;
   /* Clear of the header rather than under it, so a confirmation does not cover the
-     menu control the reader might be about to use. */
-  top: 4.25rem;
+     menu control the reader might be about to use. Measured from the header rather
+     than guessed at, now that the header is pinned and stays there. */
+  top: calc(var(--header-height) + 0.5rem);
   right: 0.9rem;
   /* Above the header, which is pinned; the skip link stays above everything. */
   z-index: 20;

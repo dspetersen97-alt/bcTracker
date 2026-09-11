@@ -22,6 +22,7 @@ from dataclasses import dataclass
 
 from django.urls import reverse
 
+from apps.accounts.middleware import session_is_fully_authenticated
 from apps.accounts.models import Role
 
 
@@ -162,5 +163,16 @@ def links_for(user) -> list[NavLink]:
 
 
 def navigation(request):
-    """Context processor: ``nav_links`` for the sidebar and the home page."""
-    return {"nav_links": links_for(getattr(request, "user", None))}
+    """Context processor: the links, and whether to show navigation at all.
+
+    ``is_signed_in`` is not ``user.is_authenticated``. A staff session that has
+    given its password and not yet its TOTP code is authenticated, and is held at
+    the code prompt by apps/accounts/middleware.py — so a sidebar rendered for it is
+    a menu of pages that all bounce back to where it already is. The answer comes
+    from that middleware rather than being worked out again here, because two
+    definitions of "signed in" is one definition and one bug.
+    """
+    return {
+        "nav_links": links_for(getattr(request, "user", None)),
+        "is_signed_in": session_is_fully_authenticated(request),
+    }

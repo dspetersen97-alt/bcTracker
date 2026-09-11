@@ -27,6 +27,7 @@ from django.urls import reverse
 from apps.accounts.models import Role
 from apps.core.navigation import links_for
 from apps.counseling.models import Case, CaseMember, CaseStatus
+from tests.conftest import TEST_PASSWORD
 
 pytestmark = pytest.mark.django_db
 
@@ -406,3 +407,74 @@ class TestTheHomePageAndTheSidebar:
         client.logout()
         sign_in(make_user(Role.COUNSELEE))
         assert "Email is not working yet" not in markup_of(client, [reverse("core:home")])
+
+
+class TestNavigationWaitsForTheWholeSignIn:
+    """A password is not a sign-in yet, and the menu should not say otherwise.
+
+    A staff session that has given its password and not its TOTP code is
+    authenticated as far as django.contrib.auth is concerned, and
+    apps/accounts/middleware.py will send it straight back to the code prompt from
+    anywhere else. Rendering the sidebar for it puts a dozen links on the page that
+    all bounce, next to a message asking for six digits — which reads as the
+    application being broken rather than as a gate doing its job.
+
+    So the sidebar follows ``is_signed_in`` from apps/core/navigation.py, which asks
+    that same middleware rather than working the answer out a second time.
+    """
+
+    def half_signed_in(self, client, user):
+        """Past the password, before the second factor."""
+        response = client.post("/login/", {"username": user.email, "password": TEST_PASSWORD})
+        assert response.status_code == 302
+        return client.get(reverse("accounts:mfa_setup")).content.decode()
+
+    def test_the_menu_is_not_shown_before_the_code_is_given(self, client, counselor):
+        markup = self.half_signed_in(client, counselor)
+
+        assert 'id="nav-toggle"' not in markup
+        assert 'class="sidebar"' not in markup
+
+    def test_nor_are_the_links_it_would_have_held(self, client, counselor):
+        """The links themselves, not just the container: a menu hidden by CSS is
+        still a list of pages in the page's source, and the point is that this
+        session has nowhere to go yet."""
+        markup = self.half_signed_in(client, counselor)
+
+        for link in links_for(counselor):
+            assert link.url not in markup, f"{link.key} is offered before the code is given"
+
+    def test_the_way_out_is_still_offered(self, client, counselor):
+        """The sidebar holds Sign out everywhere else, so the enrolment page has to
+        hold its own — hiding the menu must not trap somebody at a prompt they
+        cannot answer."""
+        markup = self.half_signed_in(client, counselor)
+
+        assert reverse("accounts:logout") in markup
+
+    def test_it_comes_back_the_moment_the_code_is_given(self, client, counselor, enrol_totp):
+        _, code = enrol_totp(counselor)
+        client.post("/login/", {"username": counselor.email, "password": TEST_PASSWORD})
+        client.post("/mfa/verify/", {"code": code()})
+
+        markup = markup_of(client, [reverse("core:home")])
+
+        assert 'id="nav-toggle"' in markup
+        for link in links_for(counselor):
+            assert link.url in markup
+
+    def test_a_counselee_is_signed_in_as_soon_as_they_have_their_password(self, client, counselee):
+        """Nobody without ``mfa_required`` owes a second factor, so there is no
+        half-way state to hide the menu for — and a counselee who saw no menu after
+        signing in correctly would have no way to use the application at all."""
+        client.post("/login/", {"username": counselee.email, "password": TEST_PASSWORD})
+
+        markup = markup_of(client, [reverse("core:home")])
+
+        assert 'id="nav-toggle"' in markup
+
+    def test_a_signed_out_visitor_has_no_menu_either(self, client):
+        markup = client.get(reverse("accounts:login")).content.decode()
+
+        assert 'id="nav-toggle"' not in markup
+        assert 'class="sidebar"' not in markup
