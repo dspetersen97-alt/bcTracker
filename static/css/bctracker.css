@@ -847,6 +847,25 @@ button.quiet:hover,
 
 .preview { margin: 1rem 0; max-width: 100%; }
 
+/* A PDF or a text file, read on the page rather than in another tab. The height
+   has to be stated: a frame's default is 150px, which is a letterbox nobody can
+   read a report through, and it does not grow to fit its contents the way an image
+   does. 80vh leaves the heading and the actions visible above and below, so it is
+   still obvious which document this is and how to download it, and the ceiling
+   stops it becoming absurd on a very tall screen.
+
+   The frame's own scrollbar is the point: paging through a forty-page report
+   scrolls the document, not the page it is sitting on. */
+.document-viewer {
+  display: block;
+  width: 100%;
+  height: min(80vh, 55rem);
+  margin: 1rem 0;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
 /* --- messages --- */
 
 /* Two shapes for two jobs — the split itself is made in

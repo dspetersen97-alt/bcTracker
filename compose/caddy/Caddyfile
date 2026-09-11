@@ -18,11 +18,15 @@
 		# deployment is known good.
 		Strict-Transport-Security "max-age={$SECURE_HSTS_SECONDS:3600}; includeSubDomains"
 		X-Content-Type-Options "nosniff"
-		X-Frame-Options "DENY"
+		# SAMEORIGIN, not DENY: the document page frames its own preview
+		# route, and this header is enforced on the framed response. Matches
+		# X_FRAME_OPTIONS in config/settings/base.py, where the reasoning is.
+		X-Frame-Options "SAMEORIGIN"
 		Referrer-Policy "same-origin"
 		# No third-party scripts, styles, or frames, and no inline anything.
-		# Documents are served as attachments, never rendered inline, so this
-		# can stay strict.
+		# The only frame is this site showing a counselor a document it is
+		# already serving them, so 'self' is as far as frame-src and
+		# frame-ancestors go.
 		#
 		# MUST match CONTENT_SECURITY_POLICY in config/settings/base.py, which
 		# is where the reasoning for each directive is written down. Caddy's
@@ -30,7 +34,7 @@
 		# browser sees and a silent difference between the two would mean
 		# testing one policy and shipping another. tests/test_security_headers.py
 		# reads this file and fails if they drift.
-		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; frame-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'"
 		Permissions-Policy "accelerometer=(), camera=(), display-capture=(), geolocation=(), gyroscope=(), microphone=(), payment=(), usb=()"
 		Cross-Origin-Resource-Policy "same-origin"
 		# Do not advertise the server software.

@@ -16,7 +16,16 @@ Which makes the allowlist load-bearing, and these tests are mostly about it:
     counselee's session attached;
   * a preview is exactly as much of a disclosure as a download, so it goes through
     the same permission check and lands in the audit trail as one.
+
+The document page shows the previewable types where somebody is already standing,
+in a frame of that same route, rather than sending them to a new tab. That is the
+one reason ``frame-src`` and ``frame-ancestors`` are 'self' rather than 'none', so
+the tests at the bottom cover both ends of it: the page frames the document, and
+the response is one a browser will let be framed. tests/test_security_headers.py
+holds the policy itself to exactly that much.
 """
+
+import re
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -157,6 +166,19 @@ class TestTheResponse:
 
         assert "sandbox" not in response["Content-Security-Policy"]
 
+    def test_it_may_be_framed_by_one_of_our_own_pages(self, client, sign_in, counselee, store):
+        """The document page shows the PDF in a frame, and both of these headers are
+        enforced on the *framed* response rather than on the page doing the framing.
+        Either one left at 'none'/DENY is an empty box with nothing in the console to
+        explain it, so both are asserted on the response a browser actually loads."""
+        document = store()
+        sign_in(counselee)
+
+        response = client.get(preview_url(document))
+
+        assert response["X-Frame-Options"] == "SAMEORIGIN"
+        assert "frame-ancestors 'self'" in response["Content-Security-Policy"]
+
     def test_text_is_given_an_encoding_rather_than_a_guess(self, client, sign_in, counselee, store):
         document = store(name="notes.txt", data="what we talked about — briefly".encode())
         sign_in(counselee)
@@ -245,13 +267,71 @@ class TestWhatThePageOffers:
 
         assert preview_url(document) in page
 
-    def test_a_pdf_is_offered_as_a_link(self, client, sign_in, counselee, store):
+    def test_a_pdf_is_shown_on_the_page_rather_than_in_another_tab(
+        self, client, sign_in, counselee, store
+    ):
+        """What a counselor asked for: open the document and read it, without a tab
+        that has to be found again and closed."""
         document = store()
         sign_in(counselee)
 
         page = client.get(reverse("documents:detail", args=[document.public_id])).content.decode()
 
-        assert preview_url(document) in page
+        assert re.search(rf'<iframe[^>]*src="{re.escape(preview_url(document))}"', page)
+        assert 'target="_blank"' not in page
+
+    def test_the_frame_says_what_is_in_it(self, client, sign_in, counselee, store):
+        """A frame with no title is "frame" in a screen reader's list of them, on a
+        page whose whole subject is which document this is."""
+        document = store(name="disclosure.pdf")
+        sign_in(counselee)
+
+        page = client.get(reverse("documents:detail", args=[document.public_id])).content.decode()
+
+        frame = re.search(r"<iframe[^>]*>", page).group(0)
+        assert 'title="' in frame
+        assert document.display_name in frame
+
+    def test_text_is_shown_the_same_way(self, client, sign_in, counselee, store):
+        """The other type with no thumbnail and nothing to look at otherwise."""
+        document = store(name="notes.txt", data=b"what we talked about")
+        sign_in(counselee)
+
+        page = client.get(reverse("documents:detail", args=[document.public_id])).content.decode()
+
+        assert re.search(rf'<iframe[^>]*src="{re.escape(preview_url(document))}"', page)
+
+    def test_a_pdf_is_not_reduced_to_its_thumbnail(self, client, sign_in, counselee, store):
+        """The thumbnail branch comes last for a reason: a 320px picture of page one
+        beside a working viewer is two answers to the same question."""
+        document = store()
+        sign_in(counselee)
+
+        page = client.get(reverse("documents:detail", args=[document.public_id])).content.decode()
+
+        assert reverse("documents:thumbnail", args=[document.public_id]) not in page
+
+    def test_the_frame_has_a_stated_height(self, client, sign_in, counselee, store):
+        """A frame defaults to 150px, which is a letterbox nobody reads a report
+        through, and the height cannot be an attribute or an inline style here — see
+        tests/test_security_headers.py for why. So it is a class, and the stylesheet
+        has to have a rule for it."""
+        from pathlib import Path
+
+        from django.conf import settings
+
+        css = (Path(settings.BASE_DIR) / "static" / "css" / "bctracker.css").read_text(
+            encoding="utf-8"
+        )
+        document = store()
+        sign_in(counselee)
+
+        page = client.get(reverse("documents:detail", args=[document.public_id])).content.decode()
+
+        assert 'class="document-viewer"' in page
+        rule = re.search(r"(?m)^\.document-viewer\s*\{([^}]*)\}", css)
+        assert rule, "the stylesheet has no rule for .document-viewer"
+        assert "height:" in rule.group(1)
 
     def test_nothing_is_offered_for_a_type_the_browser_cannot_render(
         self, client, sign_in, counselee, store

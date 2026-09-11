@@ -6,14 +6,28 @@
 <h1>{{ document.display_name }}</h1>
 <p class="role"><a href="{% url 'documents:case_documents' document.case.public_id %}">{{ document.case.label }}</a></p>
 
-{% comment %} An image is shown at full size rather than as the 320px thumbnail: this is the
-   page somebody opened to read the thing. Non-image types are offered as a link instead,
-   because a PDF cannot be embedded under this site's Content-Security-Policy
-   (frame-src 'none', object-src 'none') and relaxing that for a viewer is not a trade
-   worth making — a new tab renders the same bytes with the same protections. {% endcomment %}
+{% comment %} This is the page somebody opened to read the thing, so it reads here. An
+   image is shown at full size rather than as the 320px thumbnail; a PDF or a text file
+   is shown in a frame of the same preview route, which is why frame-src and
+   frame-ancestors are 'self' rather than 'none' (config/settings/base.py, and the
+   matching copy in compose/caddy/Caddyfile).
+
+   A frame and not <object> or <embed>: object-src stays 'none' because those hand a
+   file to a plugin, where a frame of our own route can only ever be a type the
+   allowlist in apps/core/downloads.py permits — the route 404s on anything else.
+
+   The thumbnail branch is last, so a PDF shows the document rather than a 320px
+   picture of its first page. It is what is left for a type with no viewer at all. {% endcomment %}
 {% if document.is_viewable_in_a_browser and document.is_image %}
   <img class="preview" src="{% url 'documents:preview' document.public_id %}"
        alt="{{ document.display_name }}">
+{% elif document.is_viewable_in_a_browser %}
+  <iframe class="document-viewer" title="{{ document.display_name }}"
+          src="{% url 'documents:preview' document.public_id %}"></iframe>
+  {% comment %} Said out loud because the fallback cannot be automatic: a browser that
+     will not render a PDF in a frame — some phones — shows an empty box and no error,
+     and Download is the answer to that. {% endcomment %}
+  <p class="muted">If nothing appears above, your browser cannot show this kind of file. Download it instead.</p>
 {% elif document.has_thumbnail %}
   <img class="preview" src="{% url 'documents:thumbnail' document.public_id %}"
        alt="Preview of {{ document.display_name }}" width="320">
@@ -36,10 +50,9 @@
 </dl>
 
 <div class="actions">
-  {% if document.is_viewable_in_a_browser and not document.is_image %}
-    <a class="button" href="{% url 'documents:preview' document.public_id %}"
-       target="_blank" rel="noopener">View in the browser</a>
-  {% endif %}
+  {% comment %} No "View in the browser" button any more: whatever can be viewed is
+     already above, and a button that opens the page you are on in a new tab is a
+     button that makes somebody wonder what it did. {% endcomment %}
   <a class="button" href="{% url 'documents:download' document.public_id %}">Download</a>
   {% if can_change %}<a class="button" href="{% url 'documents:edit' document.public_id %}">Edit details</a>{% endif %}
   {% if can_share %}

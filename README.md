@@ -127,9 +127,11 @@ had to leave the application to get something done:
   unreachable from the form and from the table.
 - **Documents can be read without downloading them.** Narrowly: PDF, JPEG, PNG and
   plain text, and only when the stored content type *and* the first decrypted
-  frame agree. Served `Content-Disposition: inline` with `nosniff`, audited exactly
-  like a download, and never in an iframe — the site's CSP is `frame-src 'none'`,
-  which is a promise worth more than an embedded viewer.
+  frame agree. Served `Content-Disposition: inline` with `nosniff` and audited
+  exactly like a download, and shown on the document's own page rather than in a new
+  tab. That is the one thing `frame-src`/`frame-ancestors` are `'self'` for; they
+  name no other origin, and `object-src` stays `'none'`, so nothing is ever handed
+  to a plugin and nothing framed is anything but a type on that allowlist.
 - **A document can be filed against an appointment.** Homework is handed in *for* a
   session, so `Document.booking` records which one, offered from the diary and from
   the session page. The link is a label and never a route: the appointment is

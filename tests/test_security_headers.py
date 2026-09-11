@@ -92,7 +92,7 @@ class TestEveryResponseCarriesThePolicy:
         response = client.get(reverse("accounts:login"))
 
         assert response["Permissions-Policy"] == settings.PERMISSIONS_POLICY
-        assert response["X-Frame-Options"] == "DENY"
+        assert response["X-Frame-Options"] == "SAMEORIGIN"
         assert response["X-Content-Type-Options"] == "nosniff"
         assert response["Referrer-Policy"] == "same-origin"
         assert response["Cross-Origin-Opener-Policy"] == "same-origin"
@@ -113,7 +113,11 @@ class TestWhatThePolicySays:
             # No fallback: default-src does not cover these two, so a policy
             # without them still allows a plugin or a framed page.
             "object-src 'none'",
-            "frame-ancestors 'none'",
+            # 'self' rather than 'none' since the document page frames its own
+            # preview route. Still no third-party frame in either direction, and
+            # object-src stays 'none' — see the three frame tests below.
+            "frame-ancestors 'self'",
+            "frame-src 'self'",
             # Stops an injected <base> from re-pointing every relative URL, and an
             # injected form from posting a counselee's answers somewhere else.
             "base-uri 'self'",
@@ -122,6 +126,35 @@ class TestWhatThePolicySays:
     )
     def test_it_states_the_directives_that_do_not_fall_back(self, directive):
         assert directive in settings.CONTENT_SECURITY_POLICY
+
+    def test_the_two_frame_directives_name_nothing_but_this_origin(self):
+        """The relaxation that let the document page show a PDF where somebody is
+        reading it, held to exactly what that needed.
+
+        ``frame-src`` is what lets a page of ours load a frame; ``frame-ancestors``
+        is what lets a response of ours be loaded into one. Both are 'self' and a
+        source expression cannot name a path, so what is guarded here is that
+        neither ever grows a second source — an origin in either of these is a
+        third-party page in a frame of ours, or one of our pages in a frame of
+        theirs.
+        """
+        for directive in ["frame-src", "frame-ancestors"]:
+            match = re.search(rf"{directive} ([^;]+)", settings.CONTENT_SECURITY_POLICY)
+            assert match, f"{directive} is not in the policy at all"
+            assert match.group(1) == "'self'"
+
+    def test_a_file_still_cannot_be_handed_to_a_plugin(self):
+        """The frame is of our own preview route, which serves four allowlisted
+        types and 404s on everything else. ``<object>`` and ``<embed>`` have no such
+        limit, so object-src did not move when frame-src did."""
+        assert "object-src 'none'" in settings.CONTENT_SECURITY_POLICY
+
+    def test_being_framed_is_refused_the_same_way_twice(self):
+        """X-Frame-Options is the older half of the same answer, and the two must
+        say the same thing: SAMEORIGIN beside ``frame-ancestors 'self'``. A browser
+        applying only the header it knows must not end up more permissive."""
+        assert settings.X_FRAME_OPTIONS == "SAMEORIGIN"
+        assert "frame-ancestors 'self'" in settings.CONTENT_SECURITY_POLICY
 
     def test_no_capability_is_left_open(self):
         for capability in ["camera", "microphone", "geolocation", "display-capture"]:

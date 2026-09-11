@@ -307,7 +307,13 @@ CSRF_COOKIE_SAMESITE = "Lax"
 
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "same-origin"
-X_FRAME_OPTIONS = "DENY"
+# SAMEORIGIN rather than DENY because the document page embeds its own preview
+# route in a frame, and X-Frame-Options is enforced on the *framed* response — the
+# preview would be a blank box under DENY. What DENY bought over SAMEORIGIN was
+# protection against a page on this origin framing another page on this origin,
+# which needs somebody to control a page here first; framing by anybody else is
+# still refused, by this and by ``frame-ancestors 'self'`` below.
+X_FRAME_OPTIONS = "SAMEORIGIN"
 SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
 
 # Content-Security-Policy, sent by apps.core.middleware.SecurityHeadersMiddleware.
@@ -331,8 +337,18 @@ CONTENT_SECURITY_POLICY = (
     "font-src 'self'; "
     "connect-src 'self'; "
     "object-src 'none'; "
-    "frame-src 'none'; "
-    "frame-ancestors 'none'; "
+    # A frame of our own pages, and nothing else. Both of these were 'none' until
+    # the document page began showing a PDF where somebody is reading it instead
+    # of sending them to a new tab: frame-src is what lets that page load the
+    # frame, and frame-ancestors is what lets the preview response be loaded into
+    # one. 'self' and not a URL, because a source expression cannot name a path.
+    #
+    # object-src stays 'none' deliberately. <object> and <embed> hand a file to a
+    # plugin and can be pointed at any type; an <iframe> of our own preview route
+    # can only ever be the four types on the allowlist in apps/core/downloads.py,
+    # because that route 404s on anything else.
+    "frame-src 'self'; "
+    "frame-ancestors 'self'; "
     "base-uri 'self'; "
     "form-action 'self'"
 )
