@@ -51,11 +51,20 @@ keygen:
 # development for fast reloads. The -f pair is required: the base compose file
 # keeps the database off any published port, which is correct for production but
 # unreachable from a host-side app or test run.
+#
+# -p is load-bearing. docker-compose.yml pins `name: bctracker`, so without a
+# project name of its own this target would recreate the *deployed* stack's
+# database container — adopting its pgdata volume and publishing its port to the
+# host. On a machine that runs both a real install and the test suite, that is a
+# development tool reaching into live counseling data. A separate project gets a
+# separate, empty volume.
+DEV_COMPOSE := docker compose -p bctracker-dev -f docker-compose.yml -f docker-compose.dev.yml
+
 dev-db:
-	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db
+	$(DEV_COMPOSE) up -d db
 
 dev-db-stop:
-	docker compose -f docker-compose.yml -f docker-compose.dev.yml stop db
+	$(DEV_COMPOSE) stop db
 
 migrate:
 	$(PY) manage.py migrate

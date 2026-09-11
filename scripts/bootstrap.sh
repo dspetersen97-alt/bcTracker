@@ -115,6 +115,13 @@ cd "$root"
 [ -f manage.py ] && [ -f docker-compose.yml ] && [ -f .env.example ] ||
     die "$root does not look like a bcTracker checkout"
 
+# Which Compose project this install belongs to, and so which volumes it uses.
+# The precedence is Compose's own: COMPOSE_PROJECT_NAME, then the `name:` in the
+# compose file, then the directory name.
+project="${COMPOSE_PROJECT_NAME:-$(awk '/^name:/ { print $2; exit }' docker-compose.yml)}"
+[ -n "$project" ] ||
+    project=$(basename "$root" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-')
+
 if [ -z "$host" ]; then
     if [ "$internal_tls" = "yes" ]; then
         host="localhost"
@@ -269,6 +276,37 @@ if [ "$start_stack" = "yes" ]; then
     docker info >/dev/null 2>&1 ||
         die "cannot talk to the Docker daemon. Start it, or run this as a user in the docker group."
     say "docker: ok"
+
+    # docker-compose.yml pins `name:`, so every checkout on a host is the same
+    # Compose project and shares one set of volumes — a second clone in a second
+    # directory is not a second deployment. This script always generates a new
+    # POSTGRES_PASSWORD, and Postgres reads that variable only when it first
+    # creates the cluster, so an existing pgdata volume will reject it. That
+    # surfaces as `web` restarting forever on a healthy-looking database, which is
+    # a poor way to find out.
+    if docker volume inspect "${project}_pgdata" >/dev/null 2>&1; then
+        die "the database volume ${project}_pgdata already exists.
+
+       It was created by an earlier install and its cluster still has that
+       install's POSTGRES_PASSWORD. The password this script generates cannot
+       authenticate against it, so the stack would come up unable to reach its
+       own database. Pick one:
+
+         * Keep that database. Do not run this script: 'make docker-up' brings
+           the existing stack up with the .env it was installed with. If that
+           .env is gone, so is the password, and the master key with it.
+
+         * Discard it, if this is a test install with nothing in it yet:
+           'docker compose down -v' — which also deletes the documents and
+           backups volumes, on purpose, because they are encrypted with the
+           BCTRACKER_MASTER_KEY that is about to be replaced — then run this
+           script again.
+
+         * Run a second, separate instance alongside the first by giving it its
+           own project name: 'COMPOSE_PROJECT_NAME=bctracker-test sh
+           scripts/bootstrap.sh ...', and use that variable for every compose
+           command afterwards."
+    fi
 fi
 
 if [ -e .env ] && [ "$force" != "yes" ]; then

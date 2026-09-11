@@ -439,6 +439,24 @@ class TestTheBootstrapScript:
         assert invoked, "the script no longer runs any management command"
         assert set(invoked) <= set(get_commands())
 
+    def test_it_checks_for_a_database_volume_from_an_earlier_install(self):
+        """The compose file pins `name:`, so a second checkout in a second directory
+        is the same Compose project and inherits the same pgdata volume — whose
+        cluster still has the earlier install's POSTGRES_PASSWORD. Since this script
+        always generates a new one, the stack would start unable to reach its own
+        database, and say so only as a restart loop. It refuses up front instead.
+        """
+        script = BOOTSTRAP.read_text()
+        compose = COMPOSE_FILE.read_text()
+
+        assert re.search(r"^name:\s*\S+", compose, re.MULTILINE), (
+            "the compose file no longer pins a project name, so the script's "
+            "derivation of it has nothing to read"
+        )
+        assert re.search(r"^  pgdata:", compose, re.MULTILINE), "no pgdata volume declared"
+        assert "COMPOSE_PROJECT_NAME" in script, "the script ignores Compose's own override"
+        assert "${project}_pgdata" in script, "the script no longer looks for the volume"
+
 
 class TestBackupsAreWrittenWhereTheyArePersisted:
     """`backup_database` is only useful in a container that has the volume."""

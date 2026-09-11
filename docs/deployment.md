@@ -540,6 +540,22 @@ password that cannot authenticate against the existing volume. Put the previous
 database to match. `docker compose down -v` also resolves it, by destroying the
 database; only do that on an install with nothing in it yet.
 
+The most common way to arrive here is worth stating plainly: **a second checkout
+is not a second deployment.** `docker-compose.yml` pins `name: bctracker`, so
+every clone on a host — however the directory is named — is the same Compose
+project and mounts the same `bctracker_pgdata`, `bctracker_documents` and
+`bctracker_backups`. Cloning the repository somewhere fresh and bootstrapping it
+does not get you a clean instance; it gets you new secrets pointed at the old
+volumes. `scripts/bootstrap.sh` now refuses to start in that situation and
+explains the three ways out. To run a genuinely separate instance beside an
+existing one — a staging copy, say — give it its own project name and use that
+name for every command afterwards:
+
+```bash
+export COMPOSE_PROJECT_NAME=bctracker-staging
+sh scripts/bootstrap.sh --internal-tls --admin you@example.org
+```
+
 **Certificate never issues.** `docker compose logs caddy`. The hostname must
 resolve to this host from the public internet and ports 80 and 443 must reach it;
 Let's Encrypt also rate-limits repeated failures for the same name. For LAN-only,
