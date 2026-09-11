@@ -46,7 +46,6 @@ set -eu
 host=""
 timezone="America/New_York"
 email=""
-smtp_password="${SMTP_PASSWORD:-}"
 data_dir=""
 admin_email=""
 internal_tls="no"
@@ -67,9 +66,11 @@ Usage: sh scripts/bootstrap.sh [options]
   --timezone TZ         The ministry's timezone, for office hours and stored
                         dates. Default: America/New_York.
   --email ADDRESS       The mailbox that sends invitations and reminders. Its
-                        password is read from the SMTP_PASSWORD environment
-                        variable, or prompted for. Omit it and the site runs
-                        with no mail at all — see --admin.
+                        password is NOT set here: the first administrator enters
+                        it under Email settings in the application, where it is
+                        encrypted with this deployment's master key rather than
+                        left in a file. Omit this and the site runs with no mail
+                        at all — see --admin.
   --admin ADDRESS       Create the first administrator and print a single-use
                         link for them to set a password. Needs no working mail,
                         which is what makes an install without --email usable.
@@ -182,8 +183,15 @@ render_env() {
         echo "SITE_HOSTNAME=$host"
         echo "ORG_TIME_ZONE=$timezone"
         # Empty, not an example address, when no mailbox was given. See the header.
+        # No password: it belongs in the database, sealed under the master key, and
+        # is entered under Email settings once somebody can sign in. Leaving it out
+        # of this file is the point — .env is readable by whoever can read the host,
+        # and a Workspace App Password is a live credential for the ministry's
+        # mailbox.
         echo "EMAIL_HOST_USER=$email"
-        echo "EMAIL_HOST_PASSWORD=$smtp_password"
+        echo "EMAIL_HOST_PASSWORD="
+        # Deliberately the same address rather than empty: an empty value here used
+        # to override the setting default and make Django refuse to send at all.
         echo "DEFAULT_FROM_EMAIL=$email"
         # The example ships a sample Workspace domain. Left in place it would sit
         # there looking configured; blank, it stops Google sign-in from being
@@ -319,18 +327,6 @@ if [ -e .env ] && [ "$force" != "yes" ]; then
        yourself and pass --force."
 fi
 
-if [ -n "$email" ] && [ -z "$smtp_password" ]; then
-    if [ -t 0 ]; then
-        printf 'App Password for %s (input hidden, enter to skip): ' "$email"
-        stty -echo 2>/dev/null || true
-        read -r smtp_password || smtp_password=""
-        stty echo 2>/dev/null || true
-        echo
-    fi
-    [ -n "$smtp_password" ] ||
-        say "note: no mail password given; set EMAIL_HOST_PASSWORD in .env before inviting anyone."
-fi
-
 # --- configuration ---------------------------------------------------------
 
 step "Writing .env"
@@ -338,7 +334,8 @@ step "Writing .env"
 render_env > .env
 chmod 600 .env
 say "wrote .env (0600) for $host, timezone $timezone"
-[ -n "$email" ] || say "mail is NOT configured: EMAIL_HOST_USER and EMAIL_HOST_PASSWORD are empty."
+say "mail needs finishing in the application: sign in and open Email settings."
+[ -n "$email" ] || say "no sending mailbox was given (--email), so nothing can be emailed yet."
 
 admin_path=$(awk -F= '$1 == "DJANGO_ADMIN_URL_PATH" { print $2 }' .env)
 
@@ -509,31 +506,22 @@ https://$host/$admin_path/ (nothing is registered in it; create a superuser with
    two together are the archive in the clear. Write down who holds it.
 SUMMARY
 
-if [ -z "$email" ]; then
-    cat <<'SUMMARY'
+cat <<SUMMARY
 
-2. CONFIGURE MAIL. EMAIL_HOST_USER and EMAIL_HOST_PASSWORD are empty, so no
-   invitation or reminder can be sent, and creating a counselee in the interface
-   will fail at the point it tries. Set them in .env (a Workspace App Password,
-   not the account password), 'docker compose up -d', then test:
+2. FINISH MAIL IN THE APPLICATION. Sign in as the administrator from step 4 and
+   open Email settings. Enter the sending mailbox${email:+ ($email)} and its
+   Workspace App Password — not the account password, which Google refuses — then
+   press the button that sends a test message to your own address.
 
-       docker compose exec web python manage.py shell -c \
-         "from django.core.mail import send_mail; \
-          send_mail('bcTracker test', 'It works.', None, ['you@example.org'])"
+   The password is encrypted with this deployment's master key and stored in the
+   database, which is why it is not in .env: that file is readable by anyone who
+   can read this host, and an App Password is a live credential for the ministry's
+   mailbox.
 
-   Until then, 'manage.py invite_staff' prints links instead of mailing them.
+   Until mail works, nothing is emailed — and nothing breaks either. Creating a
+   person shows you an invitation link to pass on by hand, and 'invite_staff'
+   prints one.
 SUMMARY
-else
-    cat <<SUMMARY
-
-2. TEST MAIL before it has to carry an invitation. Workspace reports nothing
-   back to this application, so a rejected message is invisible:
-
-       docker compose exec web python manage.py shell -c \\
-         "from django.core.mail import send_mail; \\
-          send_mail('bcTracker test', 'It works.', None, ['$email'])"
-SUMMARY
-fi
 
 cat <<'SUMMARY'
 
@@ -542,14 +530,16 @@ cat <<'SUMMARY'
    volume on this same pool, which survives a mistake and not a fire. See
    docs/restore-drill.md.
 
-4. CREATE THE PEOPLE. Staff accounts — counselors, administrators,
-   financial_admin — have no signup page on purpose:
+4. CREATE THE PEOPLE. Everyone after the first administrator is created inside
+   the application, on the "Add a person" page — counselors, administrators,
+   financial administrators and counselees alike. Each is emailed a link to set
+   their own password, so the office never knows it.
+
+   This command remains for the first administrator, and for the day nobody can
+   sign in any more:
 
        docker compose exec web python manage.py invite_staff \
            --email pastor@example.org --role counselor
-
-   Counselees are created inside the application, by an administrator, as part
-   of opening a case.
 
 Optional integrations (Google Calendar, Workspace sign-in, Stripe) are off and
 stay off until configured; docs/deployment.md step 12 turns them on. Step 13

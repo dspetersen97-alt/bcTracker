@@ -25,6 +25,7 @@ import pytest
 from django.urls import reverse
 
 from apps.accounts.models import Role
+from apps.core.navigation import links_for
 from apps.counseling.models import Case, CaseMember, CaseStatus
 
 pytestmark = pytest.mark.django_db
@@ -306,3 +307,100 @@ class TestBillingIsReachableByClicking:
         markup = markup_of(client, [reverse("billing:index")])
 
         assert reverse("billing:session_amend", args=[session.pk]) in markup
+
+
+class TestTheHomePageAndTheSidebar:
+    """The two places ``apps/core/navigation.py`` is rendered.
+
+    Asserted against the navigation data rather than against a list written out
+    here: the product decision about what a role can start lives in that module,
+    and a test restating it would only prove the two copies match on the day it
+    was written. What is worth asserting is that neither renderer drops an entry.
+    """
+
+    ROLES = [Role.COUNSELEE, Role.COUNSELOR, Role.ADMIN, Role.FINANCIAL_ADMIN]
+
+    @pytest.mark.parametrize("role", ROLES)
+    def test_every_link_for_the_role_is_on_the_home_page(self, client, sign_in, make_user, role):
+        user = make_user(role)
+        sign_in(user)
+
+        markup = markup_of(client, [reverse("core:home")])
+
+        for link in links_for(user):
+            assert link.url in markup, f"{role} has no way to reach {link.key}"
+
+    @pytest.mark.parametrize("role", ROLES)
+    def test_and_in_the_sidebar_of_an_unrelated_page(self, client, sign_in, make_user, role):
+        """The sidebar is on every page, which is what makes it navigation.
+
+        The account page is used because every role can open it and none of its own
+        content is a role link — so anything found here came from the sidebar.
+        """
+        user = make_user(role)
+        sign_in(user)
+
+        markup = markup_of(client, [reverse("accounts:home")])
+
+        for link in links_for(user):
+            assert link.url in markup, f"{role} loses {link.key} once they leave the home page"
+
+    def test_signing_out_is_in_the_sidebar_rather_than_the_header(self, client, sign_in, counselee):
+        """The header holds the brand and the address, and nothing that navigates."""
+        sign_in(counselee)
+
+        markup = markup_of(client, [reverse("core:home")])
+        header = markup.split("</header>")[0]
+
+        assert counselee.email in header
+        assert reverse("accounts:logout") not in header
+        assert reverse("accounts:logout") in markup
+
+    def test_the_menu_can_be_collapsed_without_javascript(self, client, sign_in, counselee):
+        """CSP has no 'unsafe-inline' and there is no JS build step, so the toggle is
+        a checkbox and a label. A script would be the one thing that cannot ship."""
+        sign_in(counselee)
+
+        markup = markup_of(client, [reverse("core:home")])
+
+        assert 'id="nav-toggle"' in markup
+        assert 'for="nav-toggle"' in markup
+        assert "<script" not in markup
+
+    def test_an_administrator_is_offered_the_pages_only_they_have(
+        self, client, sign_in, admin_user
+    ):
+        """Named explicitly, unlike the parametrized tests above: these three are the
+        v4 additions, and "the list matches itself" would not notice them going."""
+        sign_in(admin_user)
+
+        markup = markup_of(client, [reverse("core:home")])
+
+        assert reverse("accounts:user_create") in markup
+        assert reverse("counseling:case_create") in markup
+        assert reverse("core:mail_settings") in markup
+
+    def test_a_counselee_is_not_offered_staff_pages(self, client, sign_in, counselee):
+        """Hiding a link is a courtesy and never the control — tests/test_access_matrix.py
+        asserts the refusal. This asserts we are not inviting the refusal."""
+        sign_in(counselee)
+
+        markup = markup_of(client, [reverse("core:home")])
+
+        assert reverse("accounts:user_create") not in markup
+        assert reverse("core:mail_settings") not in markup
+        assert reverse("billing:index") not in markup
+
+    def test_the_mail_warning_is_shown_to_an_administrator_and_nobody_else(
+        self, client, sign_in, make_user, settings
+    ):
+        """A counselee told the ministry's SMTP is broken learns nothing they can use."""
+        settings.EMAIL_HOST_USER = ""
+        settings.EMAIL_HOST_PASSWORD = ""
+
+        sign_in(make_user(Role.ADMIN))
+        assert "Email is not working yet" in markup_of(client, [reverse("core:home")])
+
+        client.logout()
+        sign_in(make_user(Role.COUNSELEE))
+        assert "Email is not working yet" not in markup_of(client, [reverse("core:home")])

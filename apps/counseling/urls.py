@@ -12,7 +12,10 @@ from apps.counseling import views
 app_name = "counseling"
 
 urlpatterns = [
-    path("", views.dashboard, name="dashboard"),
+    # The role router. Not the site root any more — that is apps/core's home page,
+    # which every role lands on. This is what a view redirects to when it wants
+    # "wherever this person belongs" without deciding where that is.
+    path("dashboard/", views.dashboard, name="dashboard"),
     # Role landing pages.
     path("caseload/", views.counselor_dashboard, name="counselor_dashboard"),
     path("my-cases/", views.my_cases, name="my_cases"),
@@ -31,6 +34,7 @@ urlpatterns = [
     ),
     # People.
     path("counselees/new/", views.counselee_create, name="counselee_create"),
+    path("counselees/<int:pk>/", views.counselee_detail, name="counselee_detail"),
     path("profile/practice/", views.counselor_profile_edit, name="counselor_profile_edit"),
     path("profile/intake/", views.counselee_profile_edit, name="counselee_profile_edit"),
     path(

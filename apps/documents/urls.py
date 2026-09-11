@@ -18,6 +18,7 @@ urlpatterns = [
     path("cases/<int:case_pk>/documents/upload/", views.upload, name="upload"),
     path("documents/<int:pk>/", views.detail, name="detail"),
     path("documents/<int:pk>/download/", views.download, name="download"),
+    path("documents/<int:pk>/view/", views.preview, name="preview"),
     path("documents/<int:pk>/thumbnail/", views.thumbnail, name="thumbnail"),
     path("documents/<int:pk>/edit/", views.edit, name="edit"),
     path("documents/<int:pk>/share/", views.share, name="share"),

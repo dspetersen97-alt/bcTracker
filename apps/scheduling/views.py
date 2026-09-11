@@ -35,6 +35,7 @@ from apps.accounts.models import Role
 from apps.audit.models import AuditVerb
 from apps.audit.services import record
 from apps.counseling.models import Case
+from apps.documents.models import Document
 from apps.scheduling import services, slots
 from apps.scheduling.forms import (
     AvailabilityOverrideForm,
@@ -442,14 +443,29 @@ def appointments(request):
     if request.user.role == Role.COUNSELEE:
         bookable = Case.objects.for_actor(request.user).active().select_related("counselor")
 
+    upcoming = list(diary.active().upcoming().order_by("slot"))
+    past = list(diary.past().order_by("-slot")[:50])
+
+    # Which of the cases on this page take an upload. Asked per case rather than
+    # per row — the answer cannot differ between two appointments on one case — and
+    # from the rows already fetched, so a long diary does not become a permission
+    # check per line. The cases come off ``select_related``, so this costs no
+    # queries of its own.
+    uploadable_cases = {
+        case.pk
+        for case in {booking.case for booking in upcoming + past}
+        if request.user.has_perm("documents.add_document", case)
+    }
+
     return render(
         request,
         "scheduling/appointments.html",
         {
-            "upcoming": diary.active().upcoming().order_by("slot"),
-            "past": diary.past().order_by("-slot")[:50],
+            "upcoming": upcoming,
+            "past": past,
             "is_counselor": request.user.role == Role.COUNSELOR,
             "bookable": bookable,
+            "uploadable_cases": uploadable_cases,
         },
     )
 
@@ -493,12 +509,27 @@ def detail(request, pk):
     # who reads a session note.
     show_notes = request.user.has_perm("scheduling.view_booking_note", booking)
 
+    # What was sent in for this session. ``Document.objects.for_actor`` is the same
+    # queryset the documents app uses, which is what makes this safe to put on a
+    # page a financial administrator can open: for them it is ``none()``, so the
+    # block renders as nothing rather than as a list they should not have. A
+    # counselee sees their own uploads and whatever the counselor shared with the
+    # case, and not a spouse's homework.
+    session_documents = (
+        Document.objects.for_actor(request.user)
+        .filter(booking=booking)
+        .select_related("owner", "case")
+        .order_by("-created_at")
+    )
+
     return render(
         request,
         "scheduling/detail.html",
         {
             "booking": booking,
             "show_notes": show_notes,
+            "session_documents": session_documents,
+            "can_upload": request.user.has_perm("documents.add_document", booking.case),
             "can_confirm": request.user.has_perm("scheduling.confirm_booking", booking),
             "can_cancel": request.user.has_perm("scheduling.cancel_booking", booking),
             "can_reschedule": request.user.has_perm("scheduling.reschedule_booking", booking),

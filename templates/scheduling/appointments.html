@@ -27,10 +27,16 @@
   </div>
 {% endfor %}
 
+{% comment %} The "Send a document" column: homework and paperwork belong to a particular
+   session, and the moment somebody thinks of sending one is when they are looking at
+   the appointment. Filed against the booking, so it turns up on that session rather
+   than at the bottom of a case-wide pile. ``uploadable_cases`` is decided in the view
+   by documents.add_document, which is why there is no column for a financial
+   administrator to see — they cannot reach this page at all. {% endcomment %}
 <h2>Coming up</h2>
 <table class="table">
   <thead>
-    <tr><th>When</th><th>Who</th><th>Case</th><th>Length</th><th>Status</th></tr>
+    <tr><th>When</th><th>Who</th><th>Case</th><th>Length</th><th>Status</th><th>Documents</th></tr>
   </thead>
   <tbody>
     {% for booking in upcoming %}
@@ -42,9 +48,14 @@
         <td>{{ booking.case.label }}</td>
         <td>{{ booking.duration_minutes }} min</td>
         <td class="status status-{{ booking.status }}">{{ booking.get_status_display }}</td>
+        <td>
+          {% if booking.case_id in uploadable_cases %}
+            <a href="{% url 'documents:upload' booking.case_id %}?booking={{ booking.pk }}">Upload document</a>
+          {% endif %}
+        </td>
       </tr>
     {% empty %}
-      <tr><td colspan="5" class="empty">Nothing booked.</td></tr>
+      <tr><td colspan="6" class="empty">Nothing booked.</td></tr>
     {% endfor %}
   </tbody>
 </table>
@@ -52,7 +63,7 @@
 <h2>Past</h2>
 <table class="table">
   <thead>
-    <tr><th>When</th><th>Who</th><th>Case</th><th>Outcome</th></tr>
+    <tr><th>When</th><th>Who</th><th>Case</th><th>Outcome</th><th>Documents</th></tr>
   </thead>
   <tbody>
     {% for booking in past %}
@@ -64,9 +75,16 @@
           {{ booking.get_status_display }}
           {% if booking.was_late_cancellation %}<span class="badge">late notice</span>{% endif %}
         </td>
+        {% comment %} Offered on a past session too, and deliberately: homework is handed in
+           after the meeting more often than before it. {% endcomment %}
+        <td>
+          {% if booking.case_id in uploadable_cases %}
+            <a href="{% url 'documents:upload' booking.case_id %}?booking={{ booking.pk }}">Upload document</a>
+          {% endif %}
+        </td>
       </tr>
     {% empty %}
-      <tr><td colspan="4" class="empty">Nothing yet.</td></tr>
+      <tr><td colspan="5" class="empty">Nothing yet.</td></tr>
     {% endfor %}
   </tbody>
 </table>

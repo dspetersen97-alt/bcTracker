@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Add a person — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>Add a person</h1>
+  <p class="muted">They are emailed a link to set their own password, so nobody in the
+    office ever knows it. Staff accounts also have to enrol an authenticator app before
+    they can reach anything.</p>
+
+  {% if mail_reason %}
+    <p class="notice notice-warning">{{ mail_reason }} The account will still be created —
+      you will be given a link to pass on by hand.
+      {% if can_configure_mail %}
+        <a href="{% url 'core:mail_settings' %}">Set up email</a> if you would rather fix
+        that first.
+      {% endif %}
+    </p>
+  {% endif %}
+
+  <form method="post" class="stacked">
+    {% csrf_token %}
+    {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+    {% include "includes/form.html" %}
+    <button type="submit">Create account and send invitation</button>
+  </form>
+</div>
+{% endblock %}

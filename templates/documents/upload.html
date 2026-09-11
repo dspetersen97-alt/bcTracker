@@ -6,6 +6,14 @@
   <h1>Upload a document</h1>
   <p class="role"><a href="{% url 'documents:case_documents' case.pk %}">{{ case.label }}</a></p>
 
+  {% if booking %}
+    {% comment %} Stated on the page because the link that got here said "upload for this
+       session", and a form that then says nothing about the session leaves somebody
+       wondering whether it took. The hidden field below is what actually files it. {% endcomment %}
+    <p class="notice">For your appointment on
+      <a href="{% url 'scheduling:detail' booking.pk %}">{{ booking.starts_at|date:"D j M Y, g:i a" }}</a>.</p>
+  {% endif %}
+
   {% if not may_share %}
     {% comment %} Said plainly, because the alternative is someone assuming a spouse can see
        what they sent. The visibility field is not on this form at all for a
@@ -18,6 +26,7 @@
   {# enctype matters: without it the browser posts filenames, not files. #}
   <form method="post" enctype="multipart/form-data">
     {% csrf_token %}
+    {% if booking %}<input type="hidden" name="booking" value="{{ booking.pk }}">{% endif %}
     {% include "includes/form.html" %}
     <button type="submit">Upload</button>
   </form>

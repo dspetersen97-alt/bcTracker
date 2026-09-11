@@ -14,62 +14,75 @@
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
 
+  {% comment %} The sidebar is collapsed by a checkbox and a sibling CSS selector, with no
+     JavaScript at all. Three reasons, in order of weight: the CSP has no
+     'unsafe-inline' so a handler would have to be an external file, there is no JS
+     build step in this project, and a menu that stops working when a script fails
+     is a menu that strands somebody on a page with no way out. The input is
+     visually hidden but *focusable* — display:none would take the control away
+     from the keyboard entirely — and the <label> gives it its accessible name.
+
+     Unchecked is the expanded state, so the hamburger shows an X: the icon names
+     the action on offer, not the state it is in. {% endcomment %}
+  {% if user.is_authenticated %}<input type="checkbox" id="nav-toggle" class="nav-toggle">{% endif %}
+
   <header class="site-header">
-    <a class="brand" href="{% url 'counseling:dashboard' %}">bcTracker</a>
     {% if user.is_authenticated %}
-      {% comment %} Navigation is built from the role, and each link's page checks the
-         permission again. Hiding a link is a courtesy, never the control. {% endcomment %}
-      <nav aria-label="Main">
-        {% if user.role == 'counselor' %}
-          <a href="{% url 'counseling:counselor_dashboard' %}">My caseload</a>
-          <a href="{% url 'scheduling:appointments' %}">Appointments</a>
-          {% include "messaging/includes/nav_link.html" %}
-          <a href="{% url 'scheduling:availability' %}">Office hours</a>
-          <a href="{% url 'counseling:counselor_profile_edit' %}">Practice settings</a>
-        {% elif user.role == 'admin' %}
-          <a href="{% url 'counseling:case_list' %}">Cases</a>
-          <a href="{% url 'scheduling:appointments' %}">Appointments</a>
-          <a href="{% url 'billing:index' %}">Billing</a>
-          <a href="{% url 'counseling:counselee_create' %}">New counselee</a>
-        {% elif user.role == 'financial_admin' %}
-          {% comment %} No appointments link. Billing reaches sessions through a case, not
-             through a ministry-wide diary — see scheduling.view_diary. {% endcomment %}
-          <a href="{% url 'billing:index' %}">Billing</a>
-          <a href="{% url 'counseling:caseload_index' %}">Caseloads</a>
-        {% else %}
-          <a href="{% url 'counseling:my_cases' %}">My counseling</a>
-          <a href="{% url 'scheduling:appointments' %}">My appointments</a>
-          {% include "messaging/includes/nav_link.html" %}
-          <a href="{% url 'documents:my_documents' %}">My documents</a>
-          <a href="{% url 'billing:my_invoices' %}">My invoices</a>
-          <a href="{% url 'counseling:counselee_profile_edit' %}">My details</a>
-        {% endif %}
-      </nav>
-      <nav aria-label="Account">
-        <span class="who">{{ user.email }}</span>
-        <a href="{% url 'accounts:home' %}">Account</a>
-        <form method="post" action="{% url 'accounts:logout' %}" class="inline-form">
-          {% csrf_token %}
-          <button type="submit" class="link-button">Sign out</button>
-        </form>
-      </nav>
+      <label class="nav-toggle-button" for="nav-toggle" title="Show or hide the menu">
+        <span class="hamburger" aria-hidden="true"><span></span><span></span><span></span></span>
+        <span class="visually-hidden">Show or hide the menu</span>
+      </label>
     {% endif %}
+    <a class="brand" href="{% if user.is_authenticated %}{% url 'core:home' %}{% else %}{% url 'accounts:login' %}{% endif %}">bcTracker</a>
+    {% comment %} The header holds the brand and the signed-in address, and nothing else.
+       Everything that navigates is in the sidebar, including signing out. {% endcomment %}
+    {% if user.is_authenticated %}<span class="who">{{ user.email }}</span>{% endif %}
   </header>
 
-  {% if messages %}
-    <ul class="messages" role="status">
-      {% for message in messages %}
-        <li class="message message-{{ message.tags }}">{{ message }}</li>
-      {% endfor %}
-    </ul>
-  {% endif %}
+  <div class="layout">
+    {% if user.is_authenticated %}
+      {% comment %} Navigation is built from the role — see apps/core/navigation.py — and each
+         link's page checks the permission again. Hiding a link is a courtesy,
+         never the control. {% endcomment %}
+      <nav class="sidebar" aria-label="Main">
+        <ul class="nav-list">
+          <li><a href="{% url 'core:home' %}">Home</a></li>
+          {% for link in nav_links %}
+            <li>
+              <a href="{{ link.url }}">{{ link.label }}{% if link.key == 'messages' and unread_messages %}
+                <span class="badge badge-count">{{ unread_messages }}</span>{% endif %}</a>
+            </li>
+          {% endfor %}
+        </ul>
+        <ul class="nav-list nav-account">
+          <li><a href="{% url 'accounts:home' %}">Your account</a></li>
+          <li>
+            <form method="post" action="{% url 'accounts:logout' %}">
+              {% csrf_token %}
+              <button type="submit" class="link-button">Sign out</button>
+            </form>
+          </li>
+        </ul>
+      </nav>
+    {% endif %}
 
-  <main id="main">
-    {% block content %}{% endblock %}
-  </main>
+    <div class="content">
+      {% if messages %}
+        <ul class="messages" role="status">
+          {% for message in messages %}
+            <li class="message message-{{ message.tags }}">{{ message }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
 
-  <footer class="site-footer">
-    <p>Confidential. Sessions end automatically after a period of inactivity.</p>
-  </footer>
+      <main id="main">
+        {% block content %}{% endblock %}
+      </main>
+
+      <footer class="site-footer">
+        <p>Confidential. Sessions end automatically after a period of inactivity.</p>
+      </footer>
+    </div>
+  </div>
 </body>
 </html>

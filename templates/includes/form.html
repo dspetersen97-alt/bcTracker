@@ -1,15 +1,28 @@
 {% comment %} Shared form rendering. Kept in one place so every field gets its errors and
-   help text shown the same way, and so no form silently loses non-field errors. {% endcomment %}
+   help text shown the same way, and so no form silently loses non-field errors.
+
+   A div rather than a p: widgets that render a list of choices — the counselees on a
+   new case — emit their own divs, which a browser would close the paragraph around.
+   And those widgets get a fieldset and a legend instead of a label, because a label
+   pointing at a group of checkboxes points at nothing a screen reader can focus.
+   ``use_fieldset`` is Django's own answer to which is which. {% endcomment %}
 {% if form.non_field_errors %}
   <ul class="errors" role="alert">
     {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
   </ul>
 {% endif %}
 {% for field in form %}
-  <p class="field{% if field.errors %} field-invalid{% endif %}">
-    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-    {{ field }}
+  <div class="field field-{{ field.widget_type }}{% if field.errors %} field-invalid{% endif %}">
+    {% if field.use_fieldset %}
+      <fieldset>
+        <legend>{{ field.label }}</legend>
+        {{ field }}
+      </fieldset>
+    {% else %}
+      <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+      {{ field }}
+    {% endif %}
     {% if field.help_text %}<span class="help">{{ field.help_text }}</span>{% endif %}
     {% for error in field.errors %}<span class="error">{{ error }}</span>{% endfor %}
-  </p>
+  </div>
 {% endfor %}

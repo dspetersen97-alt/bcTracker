@@ -44,10 +44,24 @@ body {
   border-radius: var(--radius);
 }
 
+/* Off-screen but still read aloud. Not display:none, which removes it from the
+   accessibility tree as well and would leave the hamburger unnamed. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The header carries the brand, the menu control and the signed-in address, and
+   nothing else. Everything that navigates is in the sidebar. */
 .site-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
   padding: 0.75rem 1.25rem;
@@ -62,19 +76,175 @@ body {
   text-decoration: none;
 }
 
-.site-header nav {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
+/* Pushes the address to the right without a spacer element. */
+.who {
+  margin-left: auto;
+  color: var(--ink-soft);
   font-size: 0.9rem;
 }
 
-.who { color: var(--ink-soft); }
+/* --- the collapsible sidebar --- */
+
+/* The state lives in a checkbox rather than in JavaScript: the CSP has no
+   'unsafe-inline', there is no JS build step, and a menu that stops working when
+   a script fails is a menu that strands somebody. The input is *before* the
+   header and the layout in the document, so both can be sibling-selected from it.
+   Unchecked means expanded — that way a browser that ignores the rules below
+   shows the navigation rather than hiding it. */
+.nav-toggle {
+  position: absolute;
+  opacity: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  margin: 0;
+}
+
+.nav-toggle-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.nav-toggle-button:hover { background: var(--paper); }
+
+/* Focus is on the hidden input, so the ring has to be drawn on its label. */
+.nav-toggle:focus-visible ~ .site-header .nav-toggle-button {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.hamburger {
+  position: relative;
+  display: block;
+  width: 1.35rem;
+  height: 1rem;
+}
+
+.hamburger span {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--ink);
+  border-radius: 2px;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.hamburger span:nth-child(1) { top: 0; }
+.hamburger span:nth-child(2) { top: 50%; margin-top: -1px; }
+.hamburger span:nth-child(3) { bottom: 0; }
+
+/* Expanded: the icon is an X, because it names the action on offer — close this —
+   rather than the state it is in. Closed: three lines, meaning open it. */
+.nav-toggle:not(:checked) ~ .site-header .hamburger span:nth-child(1) {
+  top: 50%;
+  margin-top: -1px;
+  transform: rotate(45deg);
+}
+.nav-toggle:not(:checked) ~ .site-header .hamburger span:nth-child(2) { opacity: 0; }
+.nav-toggle:not(:checked) ~ .site-header .hamburger span:nth-child(3) {
+  bottom: 50%;
+  margin-bottom: -1px;
+  transform: rotate(-45deg);
+}
+
+.layout { display: flex; align-items: flex-start; }
+
+.sidebar {
+  flex: 0 0 14rem;
+  padding: 1.25rem 0.75rem;
+  background: var(--card);
+  border-right: 1px solid var(--line);
+  /* Sticks while the page scrolls, so a long case list still has the way out
+     visible. min-height rather than height: a short menu should not paint a
+     column of white down an otherwise empty page. */
+  position: sticky;
+  top: 0;
+  min-height: 60vh;
+}
+
+.nav-toggle:checked ~ .layout > .sidebar { display: none; }
+
+.nav-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.94rem;
+}
+
+.nav-list a,
+.nav-list .link-button {
+  display: block;
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--radius);
+  color: var(--ink);
+  font-size: 0.94rem;
+  text-decoration: none;
+  text-align: left;
+}
+
+.nav-list a:hover,
+.nav-list .link-button:hover { background: var(--paper); color: var(--accent); }
+
+.nav-account {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+.nav-account .link-button { width: 100%; }
+
+/* The column beside the sidebar. min-width:0 stops a wide table inside it from
+   forcing the flex row wider than the viewport and pushing the sidebar off. */
+.content { flex: 1 1 auto; min-width: 0; }
 
 main {
   max-width: 44rem;
   margin: 0 auto;
   padding: 1.5rem 1.25rem 3rem;
+}
+
+/* On a phone there is no room for both, so the sidebar overlays the content
+   instead of sitting beside it — and it starts collapsed, which is what the
+   unchecked-is-expanded default cannot express. Hence the reversed rules. */
+@media (max-width: 45rem) {
+  .sidebar {
+    position: fixed;
+    top: 3.5rem;
+    left: 0;
+    bottom: 0;
+    z-index: 5;
+    width: 14rem;
+    overflow-y: auto;
+    display: none;
+  }
+  .nav-toggle:checked ~ .layout > .sidebar { display: block; }
+  .nav-toggle:not(:checked) ~ .site-header .hamburger span:nth-child(1) {
+    top: 0;
+    margin-top: 0;
+    transform: none;
+  }
+  .nav-toggle:not(:checked) ~ .site-header .hamburger span:nth-child(2) { opacity: 1; }
+  .nav-toggle:not(:checked) ~ .site-header .hamburger span:nth-child(3) {
+    bottom: 0;
+    margin-bottom: 0;
+    transform: none;
+  }
+  .nav-toggle:checked ~ .site-header .hamburger span:nth-child(1) {
+    top: 50%;
+    margin-top: -1px;
+    transform: rotate(45deg);
+  }
+  .nav-toggle:checked ~ .site-header .hamburger span:nth-child(2) { opacity: 0; }
+  .nav-toggle:checked ~ .site-header .hamburger span:nth-child(3) {
+    bottom: 50%;
+    margin-bottom: -1px;
+    transform: rotate(-45deg);
+  }
 }
 
 .card {
@@ -150,6 +320,31 @@ summary:focus-visible {
 .field-invalid input,
 .field-invalid select,
 .field-invalid textarea { border-color: var(--danger); }
+
+/* A group of checkboxes — "the counselees on this case". Django wraps the group
+   in a div and each choice in another, and the label belongs to the choice, so
+   the weight meant for a field's own label is taken back off here. The box sits
+   beside the name because a column of boxes above names is unreadable. */
+.field fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.field fieldset legend {
+  padding: 0;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.field-checkboxselectmultiple label,
+.field-radioselect label {
+  display: flex;
+  gap: 0.45rem;
+  align-items: baseline;
+  font-weight: 400;
+  margin: 0.25rem 0;
+}
 
 .help { font-size: 0.85rem; color: var(--ink-soft); }
 
@@ -264,6 +459,51 @@ button.danger,
   border-left: 3px solid var(--accent);
   border-radius: var(--radius);
   font-size: 0.92rem;
+}
+
+/* Colour is the second signal, never the only one: each of these carries wording
+   that says the same thing. */
+.notice-warning { border-left-color: var(--danger); }
+.notice-ok { border-left-color: var(--ok); }
+
+/* --- the home page's navigation cards --- */
+
+/* The same list as the sidebar, rendered large — see apps/core/navigation.py.
+   auto-fill rather than a fixed count, because roles have between two and six
+   entries and a two-item grid should not leave four empty cells. */
+.nav-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nav-card a {
+  display: block;
+  height: 100%;
+  padding: 0.9rem 1rem;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.nav-card a:hover { border-color: var(--accent); }
+
+.nav-card-label {
+  display: block;
+  font-weight: 650;
+  color: var(--accent);
+}
+
+.nav-card-blurb {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--ink-soft);
+  font-size: 0.88rem;
 }
 
 /* --- scheduling --- */

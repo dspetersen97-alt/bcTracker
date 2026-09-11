@@ -17,10 +17,12 @@ asserted on a hand-built queryset would pass while the view called
 """
 
 import pytest
+from django.conf import settings
 from django.core import mail
 from django.db import IntegrityError, transaction
 from django.urls import reverse
 
+from apps.accounts import services
 from apps.accounts.models import Role, User
 from apps.audit.models import AuditEvent, AuditVerb
 from apps.counseling.models import (
@@ -553,27 +555,38 @@ class TestCounseleeCreation:
         assert "email" in response.context["form"].errors
         assert User.objects.filter(role=Role.COUNSELEE).count() == 1
 
-    def test_an_account_nobody_can_be_invited_to_is_not_created(
+    def test_a_failed_invitation_hands_the_link_over_instead_of_erroring(
         self, client, sign_in, admin_user, monkeypatch
     ):
-        """If the invitation cannot be sent, the account must not exist.
+        """If the invitation cannot be sent, the account stands and the link is shown.
 
-        Otherwise the address is taken by a login nobody can reach, and the
-        administrator's only recourse is a second address for the same person.
+        This used to roll the account back, on the reasoning that an address taken
+        by a login nobody can reach is worse than a failed form. That reasoning
+        only held while the link could not be recovered — and it turned a
+        deployment whose app password had been revoked into a server error on the
+        one page that takes on a new counselee. Handing the administrator the link
+        satisfies both concerns: the account exists and it is claimable.
         """
-        import apps.counseling.forms as forms_module
 
         def explode(**kwargs):
             raise RuntimeError("SMTP is down")
 
-        monkeypatch.setattr(forms_module, "invite", explode)
+        monkeypatch.setattr(services, "_send_invitation_email", explode)
         sign_in(admin_user)
 
-        with pytest.raises(RuntimeError):
-            client.post(reverse("counseling:counselee_create"), self._payload())
+        response = client.post(reverse("counseling:counselee_create"), self._payload())
 
-        assert not User.objects.filter(email="ada@example.org").exists()
-        assert not CounseleeProfile.objects.filter(user__email="ada@example.org").exists()
+        assert response.status_code == 200
+        user = User.objects.get(email="ada@example.org")
+        assert CounseleeProfile.objects.filter(user=user).exists()
+        assert not mail.outbox
+        # The link is on the page, and it is one that actually works.
+        link = response.context["invitation_link"]
+        assert client.get(link.replace(settings.SITE_BASE_URL, "")).status_code == 200
+        # And the trail says the account was created without the email arriving.
+        event = AuditEvent.objects.get(verb=AuditVerb.INVITATION_SENT, target_id=str(user.pk))
+        assert event.metadata["emailed"] is False
+        assert event.metadata["delivery_error"] == "RuntimeError"
 
     @pytest.mark.parametrize("role", [Role.COUNSELOR, Role.FINANCIAL_ADMIN, Role.COUNSELEE])
     def test_nobody_else_may_create_one(self, client, sign_in, make_user, role):

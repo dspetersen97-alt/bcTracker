@@ -97,11 +97,52 @@ widening:
    carries one line, `STRIPE_PAYMENT_LABEL`, and an amount; the invoice itself
    stays here.
 
+**v4 is complete.** The round of work that came from actually using the first
+three — navigation, and the four or five places a counselor or an administrator
+had to leave the application to get something done:
+
+- **A home page and a collapsible sidebar.** Every role lands somewhere that says
+  what they can do, and the same list of ways in is on every page.
+  `apps/core/navigation.py` is the single source of it, so a feature is offered to
+  a role in one place rather than in each template. The toggle is a checkbox and a
+  label — CSP has no `unsafe-inline` and there is no JS build step, so a script
+  would be the one thing that could not ship. The header holds the brand and the
+  signed-in address, and nothing that navigates.
+- **Accounts are created in the application.** *Add a person* creates any of the
+  four roles and emails the invitation in one step; `manage.py invite_staff`
+  remains for the bootstrap, when there is nobody to sign in as. Assigning a role
+  is still the one thing that decides who may read a counselee's file, so the page
+  belongs to `admin` alone and its refusals are audited.
+- **Mail is configured from the web UI, and the password is sealed.** The settings
+  live in a singleton row, the password under the same envelope encryption as
+  documents — a database dump has the host and username and not the secret — and
+  the environment is only a fallback. There is a *send a test message* button that
+  reports the provider's own words, and incomplete mail is an `Info` deploy check
+  rather than a 500 on the first counselee somebody creates. That 500 is what
+  prompted all of this: an install passed every check and then failed on the one
+  page it was built to do first.
+- **Documents can be read without downloading them.** Narrowly: PDF, JPEG, PNG and
+  plain text, and only when the stored content type *and* the first decrypted
+  frame agree. Served `Content-Disposition: inline` with `nosniff`, audited exactly
+  like a download, and never in an iframe — the site's CSP is `frame-src 'none'`,
+  which is a promise worth more than an embedded viewer.
+- **A document can be filed against an appointment.** Homework is handed in *for* a
+  session, so `Document.booking` records which one, offered from the diary and from
+  the session page. The link is a label and never a route: the appointment is
+  resolved through `Booking.objects.for_actor` narrowed to the case being uploaded
+  to, and a stale id loses the link rather than the upload.
+- **A counselee's file on one page.** Their cases, the next appointment, past
+  sessions, everything sent in, and the notes the viewer may read — which
+  previously meant three tabs. It gathers, so what it gathers is per membership the
+  *viewer* holds: another counselor's case for the same person is not on it, a
+  spouse's private upload is not filed under them, and `financial_admin` cannot
+  open it at all.
+
 ## Roles
 
 | Role | Can see |
 | --- | --- |
-| `admin` | Every case, counselor, and counselee; creates profiles |
+| `admin` | Every case, counselor, and counselee; creates accounts of any role, and configures the ministry's mail |
 | `counselor` | Only cases assigned to them — nothing about anyone else's counselees |
 | `financial_admin` | Who is assigned to whom, and every fee, invoice, and payment. **Never documents, messages, or what happened in a session** |
 | `counselee` | Their own scheduling and their own uploads |
@@ -156,9 +197,12 @@ sudo sh scripts/bootstrap.sh --host counseling.example.org --admin you@example.o
 
 That generates the three secrets, writes `.env` from `.env.example`, builds, starts,
 waits for the application to report healthy, and creates the first administrator.
-It will not invent a hostname and it leaves mail credentials **empty** rather than
-plausible — an unconfigured mailbox should raise on the first send, not deliver
-nowhere. `--help` lists the rest; `--print-config` shows what it would write.
+It will not invent a hostname, and it writes **no mail password at all**: the
+sending mailbox is finished in the application, under *Email settings*, where the
+password is sealed with the master key rather than left in a file. Until that is
+done nothing is emailed and nothing breaks either — that administrator's
+invitation link is printed instead. `--help` lists the rest; `--print-config`
+shows what it would write.
 
 By hand, which is the same thing more slowly:
 

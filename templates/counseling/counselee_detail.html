@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% load document_tags %}
+{% block title %}{{ counselee.full_name }} — bcTracker{% endblock %}
+
+{% block content %}
+<h1>{{ counselee.full_name }}</h1>
+<p class="role">{{ counselee.email }}</p>
+
+{% comment %} Everything on this page comes from a for_actor queryset decided in the view —
+   which cases, which sessions, which documents, and which notes. Nothing here asks
+   the question again, so a change to this template cannot widen any of it. {% endcomment %}
+<h2>Cases</h2>
+{% for row in case_rows %}
+  <div class="card">
+    <h3><a href="{% url 'counseling:case_detail' row.case.pk %}">{{ row.case.label }}</a></h3>
+    <p class="role">
+      {{ row.case.get_kind_display }} · {{ row.case.get_status_display }} ·
+      with {{ row.case.counselor.full_name }}
+    </p>
+    <dl class="detail-list">
+      <dt>On this case since</dt><dd>{{ row.membership.joined_on }}</dd>
+      {% if row.membership.ended_on %}
+        <dt>Until</dt><dd>{{ row.membership.ended_on }}</dd>
+      {% endif %}
+    </dl>
+    {% if row.notes %}
+      <h4>Presenting concern</h4>
+      <p>{{ row.notes|linebreaksbr }}</p>
+    {% endif %}
+  </div>
+{% endfor %}
+
+<h2>Next appointment</h2>
+{% if next_session %}
+  <p>
+    <a href="{% url 'scheduling:detail' next_session.pk %}">{{ next_session.starts_at|date:"l j F Y, g:i a" }}</a>
+    — {{ next_session.duration_minutes }} minutes,
+    <span class="status status-{{ next_session.status }}">{{ next_session.get_status_display }}</span>
+    {% if next_session.is_joint %}<span class="badge">whole case</span>{% endif %}
+  </p>
+{% else %}
+  <p class="empty">Nothing booked. <a href="{% url 'scheduling:appointments' %}">The diary</a> is where one goes in.</p>
+{% endif %}
+
+<h2>Past sessions</h2>
+<table class="table">
+  <thead><tr><th>When</th><th>Case</th><th>Outcome</th><th>Length</th></tr></thead>
+  <tbody>
+    {% for session in past_sessions %}
+      <tr>
+        <td><a href="{% url 'scheduling:detail' session.pk %}">{{ session.starts_at|date:"D j M Y, g:i a" }}</a></td>
+        <td>{{ session.case.label }}</td>
+        <td class="status status-{{ session.status }}">
+          {{ session.get_status_display }}
+          {% if session.was_late_cancellation %}<span class="badge">late notice</span>{% endif %}
+        </td>
+        <td>{{ session.duration_minutes }} min</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="4" class="empty">No sessions yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2>Session notes</h2>
+{% comment %} Only the notes the viewer may read — scheduling.view_booking_note, per session,
+   in the view. A counselor's note is written about the counselee rather than to them,
+   which is why it is a separate permission from seeing that the session happened. {% endcomment %}
+{% if session_notes %}
+  {% for session in session_notes %}
+    <div class="card">
+      <h3><a href="{% url 'scheduling:detail' session.pk %}">{{ session.starts_at|date:"D j M Y" }}</a></h3>
+      <p>{{ session.counselor_note|linebreaksbr }}</p>
+    </div>
+  {% endfor %}
+{% else %}
+  <p class="empty">No session notes yet.</p>
+{% endif %}
+
+<h2>Documents</h2>
+{% comment %} What they sent in, and what was shared with their whole case. Another member's
+   private upload is not here — it is on the case's documents page, attributed to
+   whoever actually sent it rather than filed under this person. {% endcomment %}
+<table class="table">
+  <thead><tr><th>Document</th><th>Kind</th><th>From</th><th>Session</th><th>Uploaded</th></tr></thead>
+  <tbody>
+    {% for document in documents %}
+      <tr>
+        <td><a href="{% url 'documents:detail' document.pk %}">{{ document.display_name }}</a></td>
+        <td>{{ document.get_kind_display }}</td>
+        <td>{{ document|source_label:request.user }}</td>
+        <td>
+          {% if document.booking %}
+            <a href="{% url 'scheduling:detail' document.booking_id %}">{{ document.booking.starts_at|date:"j M Y" }}</a>
+          {% else %}—{% endif %}
+        </td>
+        <td>{{ document.created_at|date:"j M Y" }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="5" class="empty">Nothing has been sent in.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if profile %}
+  <h2>Intake details</h2>
+  <dl class="detail-list">
+    {% if counselee.phone %}<dt>Phone</dt><dd>{{ counselee.phone }}</dd>{% endif %}
+    {% if profile.date_of_birth %}<dt>Date of birth</dt><dd>{{ profile.date_of_birth }}</dd>{% endif %}
+    {% if profile.address %}<dt>Address</dt><dd>{{ profile.address|linebreaksbr }}</dd>{% endif %}
+    {% if profile.emergency_contact_name %}
+      <dt>In an emergency</dt>
+      <dd>{{ profile.emergency_contact_name }}{% if profile.emergency_contact_phone %} — {{ profile.emergency_contact_phone }}{% endif %}</dd>
+    {% endif %}
+    {% if profile.referred_by %}<dt>Referred by</dt><dd>{{ profile.referred_by }}</dd>{% endif %}
+    <dt>Intake completed</dt><dd>{{ profile.intake_completed_on|default:"Not yet" }}</dd>
+  </dl>
+  <div class="actions">
+    <a class="button" href="{% url 'counseling:counselee_profile_edit_for' profile.pk %}">Edit intake details</a>
+  </div>
+{% endif %}
+{% endblock %}

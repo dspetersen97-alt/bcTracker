@@ -26,8 +26,15 @@
   <tbody>
     {% for member in members %}
       <tr>
-        <td>{{ member.counselee.full_name }}
-          {% if show_notes %}<span class="muted">{{ member.counselee.email }}</span>{% endif %}</td>
+        <td>
+          {% comment %} The name is the way into that person's file — sessions, documents, and
+             notes on one page. Guarded by counseling.view_counselee, decided in the
+             view, so a financial administrator sees the name as plain text. {% endcomment %}
+          {% if can_view_counselees %}
+            <a href="{% url 'counseling:counselee_detail' member.counselee_id %}">{{ member.counselee.full_name }}</a>
+          {% else %}{{ member.counselee.full_name }}{% endif %}
+          {% if show_notes %}<span class="muted">{{ member.counselee.email }}</span>{% endif %}
+        </td>
         <td>{{ member.joined_on }}</td>
         <td>{{ member.ended_on|default:"—" }}</td>
         {% if can_manage_members %}

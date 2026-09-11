@@ -1,5 +1,5 @@
 """
-Deploy-time checks for backups.
+Deploy-time checks for backups and for outgoing mail.
 
 These run under ``manage.py check --deploy``, which the container entrypoint calls
 before gunicorn starts, so a container configured in a way that makes the nightly
@@ -12,7 +12,7 @@ import shutil
 from pathlib import Path
 
 from django.conf import settings
-from django.core.checks import Error, register
+from django.core.checks import Error, Info, register
 
 
 @register("backups", deploy=True)
@@ -67,3 +67,38 @@ def check_backup_tools_are_available(app_configs, **kwargs):
                 )
             )
     return problems
+
+
+@register("mail", deploy=True)
+def check_mail_is_configured(app_configs, **kwargs):
+    """Say so at startup when this deployment cannot send email.
+
+    Deliberately ``Info`` and not ``Warning``. The entrypoint runs
+    ``check --deploy --fail-level WARNING``, and an application that cannot send
+    mail is degraded rather than broken — an administrator can still create
+    accounts and hand the invitation link over another way, which is exactly the
+    state a brand new install is in before anybody has typed an app password. A
+    warning here would make a fresh install refuse to boot at the one moment its
+    operator has no way to fix it.
+
+    The value of it being here at all is that "an install passed every check and
+    then 500ed on the first counselee" is what happened before mail settings
+    moved into the database. Now the state is named in the startup log, and the
+    web UI has a page that fixes it.
+    """
+    from apps.core import mail
+
+    reason = mail.unconfigured_reason()
+    if not reason:
+        return []
+    return [
+        Info(
+            reason,
+            hint=(
+                "Sign in as an administrator and open Email settings, or set "
+                "EMAIL_HOST_USER and EMAIL_HOST_PASSWORD in .env. Until then, "
+                "invitations must be copied from the screen by hand."
+            ),
+            id="mail.I001",
+        )
+    ]

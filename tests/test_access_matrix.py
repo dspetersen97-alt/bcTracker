@@ -68,6 +68,53 @@ MATRIX = {
         "get",
         {"anonymous": 302} | dict.fromkeys(SIGNED_IN, 200),
     ),
+    # The one page that assigns a role, and therefore decides who may read a
+    # counseling record. Administrators only — a counselor who could create an
+    # administrator could promote themselves.
+    "accounts:user_create": (
+        {},
+        "get",
+        {
+            "anonymous": 302,
+            "admin": 200,
+            "counselor": 403,
+            "financial_admin": 403,
+            "counselee": 403,
+        },
+    ),
+    # --- the home page and the ministry's own settings ---------------------
+    "core:home": (
+        {},
+        "get",
+        {"anonymous": 302} | dict.fromkeys(SIGNED_IN, 200),
+    ),
+    "core:mail_settings": (
+        {},
+        "get",
+        {
+            "anonymous": 302,
+            "admin": 200,
+            # Deliberately closed to the other staff roles: the stored password
+            # cannot be read back, but the host and username can, and changing
+            # where the ministry's mail goes is not a counseling decision.
+            "counselor": 403,
+            "financial_admin": 403,
+            "counselee": 403,
+        },
+    ),
+    "core:mail_test": (
+        {},
+        "post",
+        {
+            # 302 for the administrator: it sends to their own address and
+            # redirects back to the settings page with the outcome.
+            "anonymous": 302,
+            "admin": 302,
+            "counselor": 403,
+            "financial_admin": 403,
+            "counselee": 403,
+        },
+    ),
     "accounts:login": (
         {},
         "get",
@@ -263,6 +310,25 @@ MATRIX = {
             "counselee": 403,
         },
     ),
+    "counseling:counselee_detail": (
+        lambda s: {"pk": s.counselee.pk},
+        "get",
+        # One person's file: sessions, documents, and notes on one page. Staff who
+        # counsel, and nobody else.
+        #
+        # ``counselee`` is 403 rather than 200: this is not how anybody reaches
+        # their own record — a route keyed on a person's id would invite trying
+        # somebody else's — and their own version of it is their dashboard.
+        # ``financial_admin`` is 403 for the reason every documents route refuses
+        # them, only more so, because gathering the record is what this page does.
+        {
+            "anonymous": 302,
+            "admin": 200,
+            "counselor": 200,
+            "financial_admin": 403,
+            "counselee": 403,
+        },
+    ),
     "counseling:counselor_profile_edit": (
         {},
         "get",
@@ -362,6 +428,21 @@ MATRIX = {
         # A real decryption, from a blob the scenario fixture actually wrote. A 404
         # here for the connected actors would mean the store or the key is wrong,
         # which is worth failing over.
+        {
+            "anonymous": 302,
+            "counselee": 200,
+            "counselor": 200,
+            "admin": 200,
+            "financial_admin": 404,
+        },
+    ),
+    "documents:preview": (
+        lambda s: {"pk": s.document.pk},
+        "get",
+        # The same disclosure as a download and therefore the same column, which is
+        # the point: "view" is not a lesser permission. The scenario's document is a
+        # photo, so it is on the inline allowlist; a type that is not would be 404
+        # for everybody, which tests/test_document_preview.py asserts.
         {
             "anonymous": 302,
             "counselee": 200,

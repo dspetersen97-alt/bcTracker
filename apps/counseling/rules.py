@@ -82,6 +82,18 @@ rules.add_perm("counseling.delete_case", rules.predicate(lambda user, case: Fals
 # view has no counselor id in its URL precisely so it cannot mean anyone else.
 rules.add_perm("counseling.change_own_counselor_profile", is_counselor)
 
+# The "view counselee" page: one person's sessions, documents, and notes on one
+# screen. Staff only, and object-level scoping is left to
+# ``CaseMember.objects.for_actor`` in the view — a counselor with no membership row
+# for this person gets 404, which is the right answer because it does not confirm
+# the account exists.
+#
+# ``financial_admin`` is absent, and that absence is the point of the page having
+# its own permission: billing has the caseload index, which is names and counts.
+# A counselee is absent too — what this page is for them is their own dashboard,
+# and a route keyed on a person's id is not how anybody should reach their own.
+rules.add_perm("counseling.view_counselee", is_admin | is_counselor)
+
 # Intake details — date of birth, address, emergency contact. The counselee may
 # maintain their own; their counselor and an admin may read and correct it.
 # financial_admin is absent, matching CounseleeProfileQuerySet.

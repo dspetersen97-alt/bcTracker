@@ -59,6 +59,11 @@ class AuditVerb(models.TextChoices):
     # at whose file is the question an access review actually asks, and a trail
     # that only covers downloads cannot answer it.
     CASE_VIEWED = "case.viewed", "Case viewed"
+    # The "view counselee" page, which is one person's sessions, documents, and
+    # notes gathered onto one screen. Recorded separately from CASE_VIEWED
+    # precisely because it is a gathering: an access review asking "who has been
+    # reading this person's file" wants the page that answers that in one look.
+    COUNSELEE_VIEWED = "counselee.viewed", "Counselee file viewed"
     PROFILE_UPDATED = "profile.updated", "Profile updated"
 
     DOCUMENT_UPLOADED = "document.uploaded", "Document uploaded"
@@ -140,6 +145,13 @@ class AuditVerb(models.TextChoices):
     STRIPE_WEBHOOK_RECEIVED = "stripe.webhook_received", "Stripe webhook received"
     STRIPE_WEBHOOK_REFUSED = "stripe.webhook_refused", "Stripe webhook refused"
     STRIPE_RECONCILED = "stripe.reconciled", "Stripe reconciliation run"
+
+    # Mail configuration. Recorded because the From address and the SMTP host are
+    # where every invitation link this ministry sends goes out through: pointing
+    # them somewhere else is the quietest way to intercept an account setup, and
+    # "who changed it, and when" is the only way to notice.
+    MAIL_SETTINGS_UPDATED = "mail.settings_changed", "Mail settings changed"
+    MAIL_TEST_SENT = "mail.test_sent", "Mail test message sent"
 
     ACCESS_DENIED = "access.denied", "Access denied"
 

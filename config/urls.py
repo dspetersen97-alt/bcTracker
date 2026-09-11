@@ -15,6 +15,8 @@ from apps.core import views as core_views
 urlpatterns = [
     path(f"{settings.ADMIN_URL_PATH}/", admin.site.urls),
     path("healthz", core_views.healthz, name="healthz"),
+    # The home page every role lands on, and the ministry's own settings.
+    path("", include("apps.core.urls")),
     # Signing in, the second factor, and the account page.
     path("", include("apps.accounts.urls")),
     # There is no MEDIA_URL. These are the only routes that reach the encrypted
@@ -30,8 +32,7 @@ urlpatterns = [
     # only route in this application a stranger may reach — see the note in
     # apps/billing/stripe/webhook.py.
     path("", include("apps.billing.urls")),
-    # Counseling owns the site root, so a signed-in actor lands on the work their
-    # role actually does. Listed last because its dashboard claims "", which would
-    # otherwise shadow nothing but is clearer kept at the end.
+    # Cases, caseloads and the role router at /dashboard/. Listed last by
+    # convention rather than necessity: the site root is apps.core's home page.
     path("", include("apps.counseling.urls")),
 ]

@@ -26,6 +26,7 @@ from django.conf import settings
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
 
+from apps.core.mail import from_address
 from apps.messaging.models import NEVER_READ
 
 logger = logging.getLogger(__name__)
@@ -36,7 +37,7 @@ def _send(*, template, subject, recipient, context) -> None:
         send_mail(
             subject=subject,
             message=render_to_string(f"messaging/email/{template}.txt", context),
-            from_email=settings.DEFAULT_FROM_EMAIL,
+            from_email=from_address(),
             recipient_list=[recipient.email],
             fail_silently=False,
         )

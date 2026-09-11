@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>Welcome{% if user.first_name %}, {{ user.first_name }}{% endif %}.</h1>
+  <p class="muted">Signed in as {{ user.get_role_display|lower }}. Everything below is
+    also in the menu, at any time, from any page.</p>
+</div>
+
+{% if mail_warning %}
+  {% comment %} Shown only to whoever can fix it — see the note in apps/core/views.py.
+     It sits above the buttons because an install that cannot send mail cannot
+     invite anybody, which makes it the first thing worth doing. {% endcomment %}
+  <div class="card notice notice-warning">
+    <h2>Email is not working yet</h2>
+    <p>{{ mail_warning }} Invitations, appointment reminders and invoices will not be
+      delivered until it is set.</p>
+    <p class="actions"><a class="button" href="{% url 'core:mail_settings' %}">Set up email</a></p>
+  </div>
+{% endif %}
+
+<ul class="nav-cards">
+  {% for link in nav_links %}
+    <li class="nav-card">
+      <a href="{{ link.url }}">
+        <span class="nav-card-label">{{ link.label }}{% if link.key == 'messages' and unread_messages %}
+          <span class="badge badge-count">{{ unread_messages }}</span>{% endif %}</span>
+        {% if link.blurb %}<span class="nav-card-blurb">{{ link.blurb }}</span>{% endif %}
+      </a>
+    </li>
+  {% endfor %}
+</ul>
+{% endblock %}

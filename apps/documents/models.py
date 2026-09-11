@@ -104,6 +104,24 @@ class Document(SoftDeleteModel, TimeStampedModel):
         related_name="documents",
         help_text=_("Who uploaded it. Not who it is about."),
     )
+    # The session this was sent in for, when there is one. Null for most
+    # documents and that is not a gap: intake paperwork arrives before any
+    # appointment exists, a handout belongs to the case rather than to a Tuesday,
+    # and nothing is ever *required* to be filed against a session.
+    #
+    # SET_NULL rather than CASCADE because the document outlives the appointment
+    # in every sense that matters — losing the link would be a shame, losing a
+    # counselee's file because a diary row went away would be indefensible.
+    # Nothing in the application deletes a Booking (they are cancelled), so this
+    # is a guard against a future migration rather than a live code path.
+    booking = models.ForeignKey(
+        "scheduling.Booking",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="documents",
+        help_text=_("The appointment this was uploaded for, if it was for one."),
+    )
     visibility = models.CharField(
         max_length=20,
         choices=Visibility.choices,
@@ -173,6 +191,14 @@ class Document(SoftDeleteModel, TimeStampedModel):
             raise ValidationError(
                 {"owner": _("A document can only be uploaded by someone involved in the case.")}
             )
+        # The link is a label, and this is what stops it being a route: a booking
+        # on another case would put one case's appointment on another case's
+        # document, where a page listing "documents for this session" would show
+        # it to the wrong people. Not expressible as a check constraint — it spans
+        # two rows — so the view resolves the booking through ``for_actor`` scoped
+        # to the case as well.
+        if self.booking_id and self.case_id and self.booking.case_id != self.case_id:
+            raise ValidationError({"booking": _("That appointment is on a different case.")})
 
     def owner_is_party_to_the_case(self) -> bool:
         """Whether the uploader is the counselor or a current member.
@@ -218,6 +244,20 @@ class Document(SoftDeleteModel, TimeStampedModel):
     @property
     def has_thumbnail(self) -> bool:
         return self.thumbnail_key is not None
+
+    @property
+    def is_viewable_in_a_browser(self) -> bool:
+        """Whether a page should offer to show this rather than hand it over.
+
+        A hint for a template, and nothing more. ``documents.views.preview`` checks
+        the allowlist again against the actual plaintext, so a content type that is
+        wrong in the row produces a 404 rather than something dangerous rendered
+        inline. The allowlist itself lives in apps/core/downloads.py, beside the
+        headers that make serving it inline safe.
+        """
+        from apps.core.downloads import INLINE_TYPES
+
+        return self.content_type in INLINE_TYPES
 
     @property
     def is_shared_with_the_case(self) -> bool:

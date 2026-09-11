@@ -19,6 +19,7 @@ from django_otp.plugins.otp_totp.models import TOTPDevice
 from apps.accounts.models import LoginToken, TokenPurpose, User
 from apps.audit.models import AuditVerb
 from apps.audit.services import client_ip, record
+from apps.core.mail import from_address, mail_is_configured
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +99,11 @@ def issue_invitation(*, user, send=True, request=None, invited_by=None) -> tuple
     carries is a link that gets pasted into a chat window, and this one sets a
     password.
 
+    Raises whatever the mail backend raised if ``send=True`` and delivery fails.
+    A caller creating an account wants ``invite_or_hand_over`` instead, which
+    treats that as a delivery problem rather than as a reason for the account not
+    to exist.
+
     The raw token exists only in the return value; what is stored is a digest, so
     a caller that loses it has to issue a new invitation.
     """
@@ -108,14 +114,7 @@ def issue_invitation(*, user, send=True, request=None, invited_by=None) -> tuple
         requested_ip=client_ip(request),
     )
     if send:
-        _send_link_email(
-            user=user,
-            raw_token=raw,
-            url_name="accounts:invitation_accept",
-            subject="Set up your bcTracker account",
-            template="accounts/email/invitation",
-            expires_at=token.expires_at,
-        )
+        _send_invitation_email(user=user, raw_token=raw, expires_at=token.expires_at)
     record(
         AuditVerb.INVITATION_SENT,
         actor=invited_by,
@@ -127,6 +126,57 @@ def issue_invitation(*, user, send=True, request=None, invited_by=None) -> tuple
         emailed=send,
     )
     return token, raw
+
+
+def invite_or_hand_over(*, user, request=None, invited_by=None) -> str:
+    """Email the invitation, or return a link for the administrator to pass on.
+
+    Returns "" when the email went out, and the absolute invitation URL when it
+    did not. Every page that creates an account uses this, because the two ways
+    that can go wrong both used to produce a server error on a form that had
+    already created the account:
+
+      * mail is not configured at all — the state a new deployment starts in;
+      * mail is configured and the provider refused, which for Workspace usually
+        means the app password was revoked.
+
+    In both cases the account and its invitation are real, so the useful answer is
+    the link, not a traceback. The link is shown once, to the administrator who
+    just made the decision to create the person; it is not recoverable afterwards,
+    since only a digest is stored.
+
+    Never raises. That is the point of it.
+    """
+    token, raw = LoginToken.issue(
+        user=user,
+        purpose=TokenPurpose.INVITATION,
+        ttl_seconds=settings.INVITATION_TTL_SECONDS,
+        requested_ip=client_ip(request),
+    )
+    delivered, error = False, ""
+    if mail_is_configured():
+        try:
+            _send_invitation_email(user=user, raw_token=raw, expires_at=token.expires_at)
+            delivered = True
+        except Exception as exc:
+            # Broad on purpose: SMTP, DNS and TLS each raise something different,
+            # and the response to all of them is the same — keep the account, hand
+            # the link over. The class name goes on the audit row; the detail is in
+            # the log, because an SMTP refusal can quote the address it refused.
+            logger.exception("Could not email the invitation for user %s", user.pk)
+            error = exc.__class__.__name__
+    record(
+        AuditVerb.INVITATION_SENT,
+        actor=invited_by,
+        target=user,
+        request=request,
+        token_id=token.pk,
+        emailed=delivered,
+        delivery_error=error,
+    )
+    if delivered:
+        return ""
+    return f"{settings.SITE_BASE_URL}{invitation_path(raw)}"
 
 
 def invitation_path(raw_token: str) -> str:
@@ -217,6 +267,18 @@ def confirm_device(*, device, user, request=None):
 # --- internals ------------------------------------------------------------
 
 
+def _send_invitation_email(*, user, raw_token, expires_at):
+    """The one invitation email, so its subject and template are written once."""
+    _send_link_email(
+        user=user,
+        raw_token=raw_token,
+        url_name="accounts:invitation_accept",
+        subject="Set up your bcTracker account",
+        template="accounts/email/invitation",
+        expires_at=expires_at,
+    )
+
+
 def _send_link_email(*, user, raw_token, url_name, subject, template, expires_at):
     path = reverse(url_name, kwargs={"token": raw_token})
     context = {
@@ -228,7 +290,12 @@ def _send_link_email(*, user, raw_token, url_name, subject, template, expires_at
     send_mail(
         subject=subject,
         message=render_to_string(f"{template}.txt", context),
-        from_email=settings.DEFAULT_FROM_EMAIL,
+        # Resolved rather than read from settings: the deployment's own row wins,
+        # and an unconfigured install raises MailNotConfigured here instead of
+        # reaching the SMTP backend and raising ValueError('Invalid address ""').
+        # The callers that can offer the link another way catch it — see
+        # apps/accounts/views.py::user_create.
+        from_email=from_address(),
         recipient_list=[user.email],
         # Workspace SMTP gives no bounce reporting, so a send that fails is
         # invisible unless we log it. Not fail_silently: the caller needs to know

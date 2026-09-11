@@ -6,7 +6,15 @@
 <h1>{{ document.display_name }}</h1>
 <p class="role"><a href="{% url 'documents:case_documents' document.case_id %}">{{ document.case.label }}</a></p>
 
-{% if document.has_thumbnail %}
+{% comment %} An image is shown at full size rather than as the 320px thumbnail: this is the
+   page somebody opened to read the thing. Non-image types are offered as a link instead,
+   because a PDF cannot be embedded under this site's Content-Security-Policy
+   (frame-src 'none', object-src 'none') and relaxing that for a viewer is not a trade
+   worth making — a new tab renders the same bytes with the same protections. {% endcomment %}
+{% if document.is_viewable_in_a_browser and document.is_image %}
+  <img class="preview" src="{% url 'documents:preview' document.pk %}"
+       alt="{{ document.display_name }}">
+{% elif document.has_thumbnail %}
   <img class="preview" src="{% url 'documents:thumbnail' document.pk %}"
        alt="Preview of {{ document.display_name }}" width="320">
 {% endif %}
@@ -28,6 +36,10 @@
 </dl>
 
 <div class="actions">
+  {% if document.is_viewable_in_a_browser and not document.is_image %}
+    <a class="button" href="{% url 'documents:preview' document.pk %}"
+       target="_blank" rel="noopener">View in the browser</a>
+  {% endif %}
   <a class="button" href="{% url 'documents:download' document.pk %}">Download</a>
   {% if can_change %}<a class="button" href="{% url 'documents:edit' document.pk %}">Edit details</a>{% endif %}
   {% if can_share %}
@@ -48,5 +60,5 @@
   {% endif %}
 </div>
 
-<p class="muted">Every download of this document is recorded.</p>
+<p class="muted">Every time this document is opened or downloaded is recorded.</p>
 {% endblock %}

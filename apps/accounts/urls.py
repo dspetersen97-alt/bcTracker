@@ -49,8 +49,11 @@ urlpatterns = [
     # Second factor.
     path("mfa/setup/", views.mfa_setup, name="mfa_setup"),
     path("mfa/verify/", views.mfa_verify, name="mfa_verify"),
+    # Creating an account, of any of the four roles. Administrators only, and the
+    # only page in the application that assigns a role.
+    path("people/new/", views.user_create, name="user_create"),
     # The account page: who you are signed in as, and the security settings that
     # belong to the person rather than to the counseling work. The site root is
-    # the counseling dashboard — see config/urls.py.
+    # the home page — see config/urls.py.
     path("account/", views.home, name="home"),
 ]

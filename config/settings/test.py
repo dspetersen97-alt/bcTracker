@@ -26,6 +26,17 @@ PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 
+# The default test world is a ministry whose mail works: most tests are about
+# something else and assume an invitation or a reminder actually goes out. The
+# unconfigured deployment is a state a few tests ask for deliberately — see the
+# ``no_mail`` fixture in tests/test_invite_staff.py — and apps/core/mail.py reads
+# these as the fallback beneath the database row, so clearing them here is all it
+# takes to be back in a fresh install's shoes.
+EMAIL_HOST_USER = "counseling@example.test"
+EMAIL_HOST_PASSWORD = "not-a-real-app-password"  # noqa: S105
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+SERVER_EMAIL = EMAIL_HOST_USER
+
 # Plain static storage. The production backend is WhiteNoise's manifest storage,
 # which raises on any asset missing from a collectstatic manifest — so without
 # this, every test that renders a page would require a build step first.

@@ -57,6 +57,35 @@
   </div>
 {% endif %}
 
+{% comment %} Documents filed against this session. The list is Document.objects.for_actor,
+   so a counselee sees their own and what the counselor shared with the case, a
+   counselor sees everything on their case, and a financial administrator — who can
+   open this page for billing — gets an empty queryset and therefore no block at all.
+   The heading is inside the {% if %} for that reason: "Documents (none)" would be a
+   statement about content. {% endcomment %}
+{% if session_documents or can_upload %}
+  <div class="card">
+    <h2>Documents for this session</h2>
+    {% if session_documents %}
+      <ul class="plain-list">
+        {% for document in session_documents %}
+          <li>
+            <a href="{% url 'documents:detail' document.pk %}">{{ document.display_name }}</a>
+            <span class="muted">{{ document.byte_size|filesizeformat }} · {{ document.created_at|date:"j M Y" }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">Nothing sent in for this one yet.</p>
+    {% endif %}
+    {% if can_upload %}
+      <div class="actions">
+        <a class="button" href="{% url 'documents:upload' booking.case_id %}?booking={{ booking.pk }}">Upload document</a>
+      </div>
+    {% endif %}
+  </div>
+{% endif %}
+
 <div class="actions">
   {% if can_confirm and booking.status == 'requested' %}
     <form method="post" action="{% url 'scheduling:confirm' booking.pk %}" class="inline-form">

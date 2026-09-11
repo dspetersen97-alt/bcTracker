@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Account created — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>{{ created_user.full_name }} now has an account</h1>
+
+  <p class="notice notice-warning">The invitation could not be emailed.
+    {% if mail_reason %}{{ mail_reason }}{% endif %}
+    The account is created and the link below works — give it to them yourself.</p>
+
+  {% comment %} Shown once and nowhere else. Only a digest of the token is stored, so this
+     page cannot be reproduced; reloading it will not bring the link back. {% endcomment %}
+  <p class="secret">{{ invitation_link }}</p>
+
+  <p class="muted">It can be used once, it expires, and it lets whoever holds it set the
+    password for {{ created_user.email }} — so send it the way you would send a password,
+    and not into a group chat. If it is lost, create a fresh invitation with
+    <code>manage.py invite_staff --reinvite</code>.</p>
+
+  <div class="actions">
+    {% if can_configure_mail %}
+      <a class="button" href="{% url 'core:mail_settings' %}">Fix email settings</a>
+    {% endif %}
+    <a class="button" href="{{ next_url }}">Done</a>
+  </div>
+</div>
+{% endblock %}

@@ -9,5 +9,13 @@
     {% include "includes/form.html" %}
     <button type="submit">{% if case %}Save{% else %}Open case{% endif %}</button>
   </form>
+
+  {% if counselee_create_url %}
+    <p class="muted">
+      Not on the list? <a href="{{ counselee_create_url }}">Create a counselee account</a> —
+      you will come back here with them selected. Anything typed above is not kept, so
+      it is worth doing first.
+    </p>
+  {% endif %}
 </div>
 {% endblock %}

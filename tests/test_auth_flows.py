@@ -31,19 +31,22 @@ def link_from_last_email():
 
 
 class TestPasswordLogin:
-    def test_counselee_lands_on_their_own_cases_with_a_password(self, client, counselee):
-        """Login follows through to the page for this role, not a generic one.
+    def test_counselee_lands_on_the_home_page_with_their_own_page_on_it(self, client, counselee):
+        """Login follows through to the home page, which offers this role's pages.
 
-        LOGIN_REDIRECT_URL points at the dashboard router, so this asserts the
-        whole chain: password accepted, no second factor demanded, router picked
-        the counselee's destination.
+        Two assertions in one on purpose. The first is the whole chain: password
+        accepted, no second factor demanded, redirect followed to the landing page.
+        The second is what makes landing there acceptable — a counselee who used to
+        arrive straight at their case must still be one visible click from it, or
+        the home page is a detour rather than a welcome.
         """
         response = client.post(
             "/login/", {"username": counselee.email, "password": TEST_PASSWORD}, follow=True
         )
         assert response.status_code == 200
         assert response.wsgi_request.user == counselee
-        assert reverse("counseling:my_cases") == response.request["PATH_INFO"]
+        assert reverse("core:home") == response.request["PATH_INFO"]
+        assert reverse("counseling:my_cases") in response.content.decode()
 
     def test_login_is_recorded(self, client, counselee):
         client.post("/login/", {"username": counselee.email, "password": TEST_PASSWORD})

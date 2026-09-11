@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Email settings — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>Email settings</h1>
+  <p class="muted">How this site sends invitations, appointment reminders and invoices.
+    Saved here rather than in a file on the server, so it can be fixed by whoever
+    notices it is broken.</p>
+
+  {% if unconfigured_reason %}
+    <p class="notice notice-warning">{{ unconfigured_reason }} Nothing is being emailed
+      until that is complete.</p>
+  {% elif row.last_tested_at and not row.last_test_error %}
+    <p class="notice notice-ok">A test message sent successfully on
+      {{ row.last_tested_at|date:"j M Y" }} at {{ row.last_tested_at|time:"H:i" }}.</p>
+  {% elif row.last_test_error %}
+    <p class="notice notice-warning">The last test, on {{ row.last_tested_at|date:"j M Y" }}
+      at {{ row.last_tested_at|time:"H:i" }}, failed: {{ row.last_test_error }}</p>
+  {% endif %}
+
+  <form method="post" class="stacked">
+    {% csrf_token %}
+    {% include "includes/form.html" %}
+    <button type="submit">Save settings</button>
+  </form>
+
+  {% comment %} A separate form, because a test is a different action from a save and a
+     single button that did both would leave nobody sure which part failed. {% endcomment %}
+  <div class="actions">
+    <form method="post" action="{% url 'core:mail_test' %}" class="inline-form">
+      {% csrf_token %}
+      <button type="submit">Send a test message to {{ test_recipient }}</button>
+    </form>
+  </div>
+  <p class="muted">The test goes to your own address and nowhere else.</p>
+
+  <h2>Google Workspace</h2>
+  <p class="muted">Use <code>smtp.gmail.com</code> on port 587 with STARTTLS, the sending
+    mailbox as the username, and an <strong>app password</strong> — not the account's own
+    password, which Google will refuse. Generate one at
+    <code>myaccount.google.com/apppasswords</code> with two-step verification switched on.
+    The password is encrypted with this deployment's master key before it is stored, and
+    it is never shown again.</p>
+</div>
+{% endblock %}

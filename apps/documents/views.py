@@ -12,6 +12,7 @@ and explains each.
 """
 
 import logging
+from itertools import chain
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -23,12 +24,17 @@ from django.views.decorators.http import require_http_methods, require_POST
 
 from apps.audit.models import AuditVerb
 from apps.audit.services import record
-from apps.core.downloads import encrypted_file_response
+from apps.core.downloads import (
+    encrypted_file_response,
+    inline_file_response,
+    may_be_shown_inline,
+)
 from apps.counseling.models import Case
 from apps.documents import services
 from apps.documents.crypto import DecryptionError
 from apps.documents.forms import DocumentEditForm, DocumentUploadForm
 from apps.documents.models import Document, Visibility
+from apps.scheduling.models import Booking
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +117,24 @@ def my_documents(request):
     return render(request, "documents/my_documents.html", {"documents": documents})
 
 
+def session_being_uploaded_for(request, case):
+    """The appointment an upload is filed against, or ``None``.
+
+    Resolved through ``Booking.objects.for_actor`` and then narrowed to the case
+    the upload is going onto, so an id belonging to another case — or to a
+    counselee's spouse — finds nothing. Two scopes rather than one, because this
+    is the only place a booking id arrives from a query string.
+
+    A bad id is ignored rather than a 404. The link is a label on the document;
+    the upload is the thing the counselee came to do, and refusing the file
+    because a stale link was followed would be the wrong way round.
+    """
+    raw = request.POST.get("booking") or request.GET.get("booking") or ""
+    if not raw.isdigit():
+        return None
+    return Booking.objects.for_actor(request.user).filter(case=case, pk=raw).first()
+
+
 @login_required
 @require_http_methods(["GET", "POST"])
 def upload(request, case_pk):
@@ -125,6 +149,11 @@ def upload(request, case_pk):
         request.FILES or None,
         may_choose_visibility=may_share,
     )
+    # Carried on the query string in and a hidden field back out, rather than being
+    # a form field: nobody is choosing it, and a select of "your appointments" on
+    # the upload page would list a joint session on a family case to whoever opened
+    # it.
+    booking = session_being_uploaded_for(request, case)
 
     if request.method == "POST" and form.is_valid():
         try:
@@ -138,6 +167,7 @@ def upload(request, case_pk):
                 visibility=(
                     form.cleaned_data.get("visibility") if may_share else Visibility.PRIVATE
                 ),
+                booking=booking,
                 request=request,
             )
         except services.UploadRejected as exc:
@@ -147,12 +177,17 @@ def upload(request, case_pk):
                 request,
                 _("“%(name)s” has been uploaded.") % {"name": document.display_name},
             )
+            # Back where they came from when they came from an appointment: the
+            # page then shows the document filed against that session, which is
+            # the confirmation somebody uploading homework actually wants.
+            if booking:
+                return redirect("scheduling:detail", pk=booking.pk)
             return redirect("documents:case_documents", case_pk=case.pk)
 
     return render(
         request,
         "documents/upload.html",
-        {"form": form, "case": case, "may_share": may_share},
+        {"form": form, "case": case, "may_share": may_share, "booking": booking},
     )
 
 
@@ -202,6 +237,46 @@ def download(request, pk):
 
     return encrypted_file_response(
         frames,
+        filename=document.original_filename,
+        content_type=document.content_type,
+        byte_size=document.byte_size,
+    )
+
+
+@login_required
+def preview(request, pk):
+    """Serve the document for the browser to render, rather than to save.
+
+    The counselor's actual request: read what was sent in without a folder full of
+    counselee files accumulating in Downloads on a shared church computer. Nothing
+    about the access is softer than a download — the whole file is handed over — so
+    it goes through the same ``open_document``, with the same permission re-check
+    and the same audit row. Calling it something gentler in the trail would
+    understate what happened.
+
+    Two things stand between "inline" and serving a counselee's uploaded SVG as our
+    own origin: the type must be on the allowlist in ``apps/core/downloads.py``, and
+    the plaintext's first bytes must agree with it. Anything else is a 404 rather
+    than a silent fallback to a download, because a page that offers "View" and
+    quietly saves a file instead has told the user something untrue.
+    """
+    document = visible_document_or_404(request, pk)
+
+    try:
+        frames = services.open_document(document, actor=request.user, request=request)
+        head = next(frames, b"")
+    except FileNotFoundError:
+        logger.error("Document %s has no stored blob (%s)", document.pk, document.storage_key)
+        raise Http404 from None
+    except DecryptionError:
+        logger.error("Document %s failed to decrypt", document.pk)
+        raise Http404 from None
+
+    if not may_be_shown_inline(document.content_type, head):
+        raise Http404
+
+    return inline_file_response(
+        chain([head], frames),
         filename=document.original_filename,
         content_type=document.content_type,
         byte_size=document.byte_size,

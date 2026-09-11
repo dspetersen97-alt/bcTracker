@@ -20,7 +20,7 @@ order to do things in.
 | A host | TrueNAS SCALE, or any Linux host with Docker Engine and Compose v2. 4 GB RAM is comfortable; ClamAV is the hungry part |
 | A hostname | An A record pointing at the host. Automatic TLS needs ports 80 and 443 reachable **from the internet**; a LAN-only variant is in step 5 |
 | An encrypted dataset | For counseling documents and backups. Step 2 |
-| A mailbox | Google Workspace, with 2FA on the sending account and an **App Password** — not the account password |
+| A mailbox | Google Workspace, with 2FA on the sending account and an **App Password** — not the account password. Entered in the web UI, not in a file. Step 7 |
 | A decision | Who holds the master key, and where. Step 4 |
 
 Optional, and better added after the base stack is known good: Google Calendar
@@ -160,7 +160,12 @@ refuses to start without them:
 | `SITE_BASE_URL` | `https://counseling.example.org`. Every link in every email is built from this, never from a request |
 | `SITE_HOSTNAME` | The same host without the scheme. Caddy requests a certificate for it |
 | `ORG_TIME_ZONE` | The ministry's own zone. Office hours are interpreted here |
-| `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL` | The Workspace mailbox and its **App Password** |
+
+**Mail is not in that table, on purpose.** The mailbox and its **App Password**
+are entered in the web UI, under *Email settings*, and the password is stored
+sealed in the database rather than in this file — so leave `EMAIL_HOST_USER`,
+`EMAIL_HOST_PASSWORD` and `DEFAULT_FROM_EMAIL` empty and read step 7. The stack
+starts without them; what it will not do is pretend a message was sent.
 
 Leave `DOCUMENT_STORE_ROOT`, `BACKUP_ROOT`, `POSTGRES_HOST` and `CLAMAV_HOST` as
 they are; Compose sets them per service and the values in `.env` are for
@@ -245,22 +250,52 @@ curl -sS https://counseling.example.org/healthz
 
 ---
 
-## 7. Prove email works, before it carries an invitation
+## 7. Mail — configured in the application, not in `.env`
 
-Every account is created by emailing somebody a link. If SMTP is wrong, the
-account exists, the link does not arrive, and there is nothing in the interface
-that says so.
+Every account is created by emailing somebody a link, so mail carries the first
+thing anybody does here. Two facts about how it is configured:
+
+- **The settings live in the database and are edited in the web UI.** Sign in as
+  an `admin`, open **Email settings**, and enter the server, the port, the
+  mailbox, its **App Password** and the address to send as. The password is
+  sealed with the same envelope scheme as documents — a database dump contains
+  the host and the username, never the secret — and it is write-only in the form:
+  the page says whether a password is stored, and never shows it back.
+- **`.env` is only a fallback.** Values found there are used when the database row
+  is missing or blank, which is what keeps an older install working and lets
+  `config/settings/dev.py` swap the backend for the console. Anything set in the
+  UI wins. `EMAIL_BACKEND` is settable too, for a deployment that sends through
+  something other than SMTP.
+
+The ordering this implies is deliberate. You cannot configure mail until an
+administrator exists, and an administrator cannot be invited by email until mail
+works — so `invite_staff` **prints** the link when nothing is configured (step 9).
+The first administrator gets in on a printed link, and then sets mail up from
+inside. Nothing about this step blocks steps 8 and 9.
+
+Once that administrator is in, prove it: **Email settings → Send a test
+message**, which sends to an address you choose and shows the provider's own
+words if it fails. The page keeps the time of the last test and the last error, so
+whoever opens it next can see the state without repeating the test. Host-side, the
+same thing:
 
 ```bash
 docker compose exec web python manage.py shell -c \
-  "from django.core.mail import send_mail; \
-   send_mail('bcTracker test', 'It works.', None, ['you@example.org'])"
+  "from apps.core.mail import send_test_message, unconfigured_reason; \
+   print(unconfigured_reason() or 'mail is configured'); \
+   send_test_message(recipient='you@example.org')"
 ```
 
-If that fails: the password must be a Workspace **App Password**, the port is 587
-with STARTTLS, and `DEFAULT_FROM_EMAIL` has to be an address the account is
-allowed to send as. Workspace has no bounce webhook, so a rejected message is
-invisible to this application — which is why this step is a step.
+If it fails: the password must be a Workspace **App Password**, the port is 587
+with STARTTLS, and the From address has to be one the account is allowed to send
+as. Workspace has no bounce webhook, so a *rejected* message is invisible to this
+application — which is why this is a step and not a footnote.
+
+The startup check in step 6 names this state: incomplete mail settings appear in
+the log as `mail.I001` with the missing piece spelled out. It is deliberately an
+*info* rather than a warning, so it does not stop a container that is otherwise
+fine — a new install with no mailbox yet is degraded, not broken, and refusing to
+boot at that moment would leave nobody able to fix it.
 
 ---
 
@@ -287,12 +322,11 @@ in the application.
 
 ## 9. Create the ministry's own accounts
 
-**Staff accounts are created from the command line.** There is deliberately no
-self-service signup, and — worth knowing before you look for it — no UI for
-creating a counselor, a second administrator, or a `financial_admin` either. Only
-counselees have a creation page, because creating one is part of a counselor's or
-administrator's ordinary work. A staff role decides who may read a counselee's
-file, so assigning one is not something a session should be able to do.
+**The first one is created from the command line, and only the first one has to
+be.** There is deliberately no self-service signup, but an `admin` can create an
+account of any of the four roles from **Add a person** inside the application. What
+the command line is for is the bootstrap: on a host where nobody has an account
+yet, there is no administrator to sign in as.
 
 ```bash
 docker compose exec web python manage.py invite_staff \
@@ -325,13 +359,18 @@ What the command does, and what it will not:
   interface; superuser is the break-glass account from step 8, and a day-to-day
   administrator should not have it.
 
-Then, in the application itself, as an `admin`:
+Then, in the application itself, as that `admin`:
 
-1. **New counselee** creates the account and emails the invitation in one step.
-2. **Open a case** assigns a counselor and adds the counselee(s) as members. Access
-   to everything — documents, messages, appointments, invoices — derives from
-   case membership, so until this exists nobody can see anything.
-3. Each counselor sets their own office hours before counselees can book.
+1. **Email settings** — step 7. Do it before creating anybody else, and every
+   invitation after this one arrives by itself.
+2. **Add a person** creates an account of any role and emails the invitation in one
+   step. It is the same code the command runs, including the fallback: if mail is
+   not working the link is shown on the next screen, once, rather than lost.
+3. **Open a case** assigns a counselor and selects the counselee(s). Access to
+   everything — documents, messages, appointments, invoices — derives from case
+   membership, so until this exists nobody can see anything. If the person has no
+   account yet, the link on that page creates one and returns with them selected.
+4. Each counselor sets their own office hours before counselees can book.
 
 `manage.py seed_demo` exists for development and refuses to run unless `DEBUG` is
 on. Do not go looking for a way around that: seeded accounts have a published
@@ -508,7 +547,8 @@ table below), Postgres is not up, or a migration failed. `caddy` waits for `web`
 to report healthy, so a silent site with a healthy database is almost always
 this.
 
-**Deploy checks.** Each is a refusal to serve in a state somebody would regret.
+**Deploy checks.** Each is a refusal to serve in a state somebody would regret —
+with one deliberate exception, at the bottom of the table.
 
 | Id | What it means |
 | --- | --- |
@@ -521,6 +561,7 @@ this.
 | `billing.E001`–`E002` | `BILLING_DUE_DAYS` negative, or `BILLING_CURRENCY` not a three-letter code |
 | `billing.E003`–`E005` | Stripe on without a secret key, **without a webhook secret**, or with a localhost `SITE_BASE_URL` |
 | `billing.W001`, `W002` | A Stripe *test* key in production; a webhook tolerance far from Stripe's 300s |
+| `mail.I001` | Mail is incomplete, and the message names what is missing. **Info, not a refusal** — the site runs, and invitations are printed instead of sent. Step 7 |
 
 **`exec /app/compose/web/entrypoint.sh: no such file or directory`** — and the file
 is plainly there. The missing thing is the *interpreter*: a CRLF line ending makes
@@ -568,9 +609,10 @@ the scheme: `https://counseling.example.org`, not the bare hostname.
 `docker compose ps`. This is deliberate: an unscanned upload is not accepted in
 its place.
 
-**Emails do not arrive.** Step 7. Workspace reports nothing back to this
-application, so test SMTP directly rather than inferring it from a missing
-invitation.
+**Emails do not arrive.** *Email settings → Send a test message*, which shows the
+provider's own refusal and records it on the page. Workspace reports nothing back
+to this application afterwards, so test it directly rather than inferring anything
+from a missing invitation. Step 7.
 
 **Stripe deliveries get a 400.** The signing secret does not match the endpoint,
 or the delivery is older than `STRIPE_WEBHOOK_TOLERANCE_SECONDS`. The response is

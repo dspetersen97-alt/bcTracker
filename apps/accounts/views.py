@@ -27,10 +27,10 @@ from django.contrib.auth import login as auth_login
 from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
+from django.core.exceptions import PermissionDenied
 from django.http import HttpResponseRedirect
 from django.shortcuts import redirect, render
 from django.urls import reverse, reverse_lazy
-from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods, require_POST
@@ -42,6 +42,7 @@ from apps.accounts.forms import (
     MagicLinkRequestForm,
     SetPasswordForm,
     TOTPCodeForm,
+    UserCreateForm,
 )
 from apps.accounts.models import TokenPurpose
 from apps.accounts.services import (
@@ -54,6 +55,8 @@ from apps.accounts.services import (
 )
 from apps.audit.models import AuditVerb
 from apps.audit.services import record
+from apps.core import mail as core_mail
+from apps.core.http import safe_next
 
 logger = logging.getLogger(__name__)
 
@@ -61,22 +64,35 @@ logger = logging.getLogger(__name__)
 def post_login_url(user) -> str:
     """Where a given role belongs after signing in.
 
-    One function so the answer is stated once. The counseling dashboard is a
-    router: it forwards each role to the page built for it, which keeps the
-    per-role decision in the app that owns cases rather than here.
+    One function so the answer is stated once. The home page, not the role's own
+    working page: a person signing in is not always coming back to the thing they
+    were last doing, and a page that names what they can do is kinder than
+    landing them in a table. Their role's pages are one click away, in the
+    sidebar and as the buttons on that page — see apps/core/navigation.py.
+
+    ``counseling:dashboard`` still exists as the router for a view that wants
+    "wherever this person belongs" without deciding where that is.
     """
-    return reverse("counseling:dashboard")
+    return reverse("core:home")
 
 
-def _safe_next(request, default):
-    candidate = request.POST.get("next") or request.GET.get("next") or ""
-    if candidate and url_has_allowed_host_and_scheme(
-        url=candidate,
-        allowed_hosts={request.get_host()},
-        require_https=request.is_secure(),
-    ):
-        return candidate
-    return default
+def require_perm(request, perm, obj=None):
+    """Refuse, and say in the trail that we refused.
+
+    The same helper each app's views define. Recording the denial matters more
+    here than elsewhere: this module is where accounts are made, so an attempt to
+    reach it without the permission is worth being able to find later.
+    """
+    if not request.user.has_perm(perm, obj):
+        record(
+            AuditVerb.ACCESS_DENIED,
+            actor=request.user,
+            target=obj,
+            request=request,
+            permission=perm,
+        )
+        raise PermissionDenied
+    return True
 
 
 # --- password login -------------------------------------------------------
@@ -113,7 +129,7 @@ class BcTrackerLoginView(LoginView):
         return super().form_invalid(form)
 
     def get_success_url(self):
-        return _safe_next(self.request, post_login_url(self.request.user))
+        return safe_next(self.request, post_login_url(self.request.user))
 
     def get_context_data(self, **kwargs):
         # The Google button is rendered only when it would work. A button that
@@ -323,7 +339,7 @@ def mfa_setup(request):
             confirm_device(device=device, user=request.user, request=request)
             otp_login(request, device)
             messages.success(request, _("Two-factor authentication is now active."))
-            return redirect(_safe_next(request, post_login_url(request.user)))
+            return redirect(safe_next(request, post_login_url(request.user)))
         record(AuditVerb.MFA_FAILED, actor=request.user, request=request, stage="enrolment")
         form.add_error("code", _("That code was not accepted. Try the next one."))
 
@@ -353,7 +369,7 @@ def mfa_verify(request):
         if device.verify_token(form.cleaned_data["code"]):
             otp_login(request, device)
             record(AuditVerb.MFA_VERIFIED, actor=request.user, request=request)
-            return redirect(_safe_next(request, post_login_url(request.user)))
+            return redirect(safe_next(request, post_login_url(request.user)))
         record(AuditVerb.MFA_FAILED, actor=request.user, request=request, stage="verification")
         form.add_error("code", _("That code was not accepted. Try the next one."))
 
@@ -394,6 +410,65 @@ def home(request):
             # answer comes from apps/accounts/rules.py and there is one place to
             # change if administration is ever delegated.
             "can_manage_users": request.user.has_perm("accounts.manage_users"),
+        },
+    )
+
+
+@login_required
+@never_cache
+@require_http_methods(["GET", "POST"])
+def user_create(request):
+    """Create an account of any of the four roles, and invite the person to it.
+
+    The form does the work — see ``apps.accounts.forms.UserCreateForm`` for why
+    one form covers all four roles. What this view adds:
+
+      * ``accounts.manage_users``, checked here and recorded when refused. This is
+        the page that decides who can read counseling records, so it is the page
+        whose refusals are worth finding in the trail.
+      * the fallback screen. When the invitation could not be emailed the account
+        still exists, and the link is shown once, on the next screen, to the
+        administrator who just created the person. It is deliberately not put in a
+        redirect or a flash message: those travel in the session cookie, and this
+        link sets a password.
+      * ``?next=``, so the "add a counselee" link on the New Case page comes back
+        to the case being opened rather than stranding the administrator here.
+
+    ``manage.py invite_staff`` remains for the first administrator and for
+    recovery, and shares ``issue_invitation`` with this page.
+    """
+    require_perm(request, "accounts.manage_users")
+
+    form = UserCreateForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        created = form.save(created_by=request.user, request=request)
+        if form.invitation_link:
+            return render(
+                request,
+                "accounts/user_created.html",
+                {
+                    "created_user": created,
+                    "invitation_link": form.invitation_link,
+                    "mail_reason": core_mail.unconfigured_reason(),
+                    "can_configure_mail": request.user.has_perm("core.manage_site_settings"),
+                    "next_url": safe_next(request, reverse("accounts:user_create")),
+                },
+            )
+        messages.success(
+            request,
+            _("%(name)s now has an account. An invitation is on its way to %(email)s.")
+            % {"name": created.full_name, "email": created.email},
+        )
+        return redirect(safe_next(request, reverse("accounts:user_create")))
+
+    return render(
+        request,
+        "accounts/user_form.html",
+        {
+            "form": form,
+            # Passed through the form so a cancel or a second creation keeps it.
+            "next": safe_next(request, ""),
+            "mail_reason": core_mail.unconfigured_reason(),
         },
     )
 

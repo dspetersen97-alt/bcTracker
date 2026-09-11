@@ -56,6 +56,7 @@ def store_document(
     description="",
     kind=None,
     visibility=Visibility.PRIVATE,
+    booking=None,
     request=None,
 ):
     """Validate, scan, encrypt, and store one uploaded file. Returns the Document.
@@ -94,6 +95,10 @@ def store_document(
     document = Document(
         case=case,
         owner=owner,
+        # Whichever caller passed this has already resolved the booking through
+        # ``Booking.objects.for_actor`` scoped to this case; the model's ``clean``
+        # says the same thing for anything that has not.
+        booking=booking,
         visibility=visibility,
         kind=kind or DocumentKind.OTHER,
         title=title,
@@ -131,6 +136,7 @@ def store_document(
                 byte_size=document.byte_size,
                 visibility=document.visibility,
                 scan_status=document.scan_status,
+                booking_id=document.booking_id,
             )
     except BaseException:
         ingest.discard(written)

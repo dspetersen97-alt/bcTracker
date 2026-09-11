@@ -139,6 +139,9 @@ TEMPLATES = [
                 # The unread count in the header. Cheap, and zero queries for the
                 # roles that have no place in a conversation.
                 "apps.messaging.context.unread_messages",
+                # The sidebar's links, built from the role. No queries at all —
+                # see apps/core/navigation.py for why they are data and not markup.
+                "apps.core.navigation.navigation",
             ],
         },
     },
@@ -200,10 +203,10 @@ AUTHENTICATION_BACKENDS = [
 
 LOGIN_URL = "accounts:login"
 LOGOUT_REDIRECT_URL = "accounts:login"
-# Where to land after login. Each role has a different home, so the real
-# decision is made by apps.accounts.views.post_login_url; this value only
-# matters for the few flows that bypass it.
-LOGIN_REDIRECT_URL = "counseling:dashboard"
+# Where to land after login. The real decision is made by
+# apps.accounts.views.post_login_url; this value only matters for the few flows
+# that bypass it, and it names the same page.
+LOGIN_REDIRECT_URL = "core:home"
 
 # --- Second factor and login links ---------------------------------------
 
@@ -420,14 +423,29 @@ CLAMAV_TIMEOUT_SECONDS = env.int("CLAMAV_TIMEOUT_SECONDS", default=30)
 # Google Workspace SMTP. Deliberately kept behind Django's email backend
 # interface: Workspace has a low daily send cap and no bounce reporting, so
 # moving to a transactional provider should be a settings change only.
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+#
+# The default backend reads its host, username and password from the database
+# first and from the values below second — see apps/core/mail.py for why, and for
+# where the mailbox password is sealed. Overridable by environment so a ministry
+# moving to a provider with an API rather than SMTP does not have to touch code,
+# and so dev.py and test.py can swap it for something that never opens a socket.
+EMAIL_BACKEND = env("EMAIL_BACKEND", default="apps.core.mail.ConfiguredEmailBackend")
 EMAIL_HOST = env("EMAIL_HOST", default="smtp.gmail.com")
 EMAIL_PORT = env.int("EMAIL_PORT", default=587)
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
-DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="counseling@example.org")
-SERVER_EMAIL = DEFAULT_FROM_EMAIL
+# No placeholder default, and an empty value in .env is treated as absent rather
+# than as an address. Both halves of that matter: `DEFAULT_FROM_EMAIL=` in the
+# file overrides any default with "", and Django's SMTP backend then raises
+# ValueError('Invalid address ""') from inside send_mail — which surfaced as a
+# 500 on "create a counselee" in a bootstrapped install. A placeholder would be
+# no better: mail would leave with a From address the mailbox is not allowed to
+# send as, and Workspace would reject it. apps/core/mail.py's from_address() is
+# what every send actually calls, and it falls back to the sending mailbox.
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="") or EMAIL_HOST_USER
+# Django itself uses SERVER_EMAIL for error mail and refuses an empty one.
+SERVER_EMAIL = DEFAULT_FROM_EMAIL or "bctracker@localhost"
 
 
 # --- Google Calendar ------------------------------------------------------

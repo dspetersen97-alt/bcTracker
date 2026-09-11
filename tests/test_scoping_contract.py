@@ -32,6 +32,11 @@ UNSCOPED_BY_DESIGN = {
     # Looked up by digest, never listed. A scoped queryset would not help: the
     # security property is that the digest is unguessable.
     "accounts.LoginToken",
+    # One row, describing the deployment rather than a person. It is only in reach
+    # of this test at all because it records which administrator last changed it.
+    # Access to it is a single permission — core.manage_site_settings — and the
+    # secret it holds is sealed, so a scoped queryset would protect nothing.
+    "core.MailSettings",
 }
 
 

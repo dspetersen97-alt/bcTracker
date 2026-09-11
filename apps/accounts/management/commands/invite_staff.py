@@ -1,20 +1,17 @@
 """
 Create a ministry staff account and invite them to set a password.
 
-There is deliberately no page in the application that does this. Counselees are
-created by an administrator as part of opening a case, because that is a
-counseling decision made inside the product; a counselor, administrator, or
-financial administrator is a decision about who works for the ministry, and the
-only person entitled to make it is whoever can reach the server. Adding a "new
-staff member" form would put role assignment — the input to every access rule in
-this codebase — behind nothing but a session, which is the one thing the access
-model does not want to depend on.
-
-So this command is the whole staff-provisioning path, including the first
-administrator on an empty database, which is why it can print the invitation
-link instead of mailing it: before that account exists there is nobody to
+This is how the *first* administrator comes into existence, and it can print the
+invitation link instead of mailing it: on an empty database there is nobody to
 configure SMTP, and an installation that cannot create its first user until mail
-works is an installation that cannot be started.
+works is an installation that cannot be started. It is also the recovery path
+when there is no administrator left who can sign in.
+
+Day to day, an administrator now creates staff from the application instead — see
+``apps/accounts/views.py::user_create``. That page and this command deliberately
+share ``issue_invitation`` and the same refusals, so the rules about who may
+exist live in one place; what the page adds is that the person making the
+decision does not need shell access to the host.
 
 What it deliberately will not do:
 
@@ -36,6 +33,7 @@ from apps.accounts.models import STAFF_ROLES, Role, User
 from apps.accounts.services import invitation_path, issue_invitation
 from apps.audit.models import AuditVerb
 from apps.audit.services import record
+from apps.core.mail import mail_is_configured
 
 
 class Command(BaseCommand):
@@ -79,8 +77,11 @@ class Command(BaseCommand):
 
         existing = User.objects.filter(email__iexact=email).first()
         # Mail is configured or it is not; there is no third state, and the
-        # difference decides whether this command can deliver anything.
-        mail_configured = bool(settings.EMAIL_HOST_USER and settings.EMAIL_HOST_PASSWORD)
+        # difference decides whether this command can deliver anything. Asked of
+        # apps.core.mail rather than of the environment, because the settings now
+        # live in the database as well — a ministry that configured SMTP from the
+        # web UI should not be told at the console that it has no mail account.
+        mail_configured = mail_is_configured()
         send = mail_configured and not options["print_link"]
 
         with transaction.atomic():
@@ -186,7 +187,8 @@ class Command(BaseCommand):
             self.stdout.write(f"An invitation was emailed to {user.email}.")
         else:
             reason = (
-                "no mail account is configured (EMAIL_HOST_USER / EMAIL_HOST_PASSWORD)"
+                "no mail account is configured (set one under Email settings, or "
+                "EMAIL_HOST_USER / EMAIL_HOST_PASSWORD in .env)"
                 if not mail_configured
                 else "asked for with --print-link"
             )
