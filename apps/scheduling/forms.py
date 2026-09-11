@@ -9,19 +9,46 @@ then arguing with it. The field is a hidden input filled in by clicking a slot;
 not on it, so a hand-crafted POST gains nothing.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from django import forms
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.scheduling.models import (
+    MAX_SERIES_SESSIONS,
     Attendance,
     AvailabilityOverride,
     AvailabilityRule,
     Booking,
     GoogleCredential,
     Weekday,
+    validate_meeting_link,
 )
+
+
+def MeetingLinkField(**kwargs):  # noqa: N802 — a field factory, named like the field it makes
+    """The meeting-link field, defined once for the three forms that offer it.
+
+    ``assume_scheme="https"`` so that pasting ``meet.example.com/abc-defg`` — which
+    is what a person copies out of a chat message — is completed rather than
+    rejected. Django 6 makes https the default; naming it now means this file does
+    not change when that lands, and means the completion is not silently http on
+    the way there.
+
+    ``validate_meeting_link`` is the model's own validator rather than a second
+    copy of the rule, so the form and the row cannot come to disagree about what a
+    meeting link is.
+    """
+    return forms.URLField(
+        required=False,
+        max_length=500,
+        assume_scheme="https",
+        validators=[validate_meeting_link],
+        label=_("Meeting link"),
+        help_text=_("Optional. Paste the link from Zoom, Meet or Teams to make this virtual."),
+        **kwargs,
+    )
 
 
 class AvailabilityRuleForm(forms.ModelForm):
@@ -142,17 +169,20 @@ class BookingRequestForm(forms.Form):
         return self.cleaned_data.get("attendance") or Attendance.INDIVIDUAL
 
 
-class CounselorBookingForm(forms.Form):
-    """What a counselor sends when scheduling on someone's behalf.
+class BookingDetailsForm(forms.Form):
+    """Everything a counselor says about an appointment except *when* it is.
 
-    A real date and time rather than a slot to click: a counselor fitting in an
-    urgent session is not choosing from the published hours, so there is no list to
-    pick from. ``services.book`` is called with ``enforce_availability=False``, and
-    the exclusion constraint is still the thing that stops a clash.
+    Split out because "when" is the only thing that differs between booking one
+    appointment and booking a weekly series, and the two forms disagreeing about
+    who may be booked, or about how a meeting link is validated, would be a bug
+    nobody would find by reading either one.
+
+    Field order is set on the subclasses rather than left to declaration order:
+    inherited fields come first in Django's ordering, which would put the date
+    after the length. See ``field_order``.
     """
 
     counselee = forms.ModelChoiceField(queryset=None, label=_("Who is this for"))
-    date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
     time = forms.TimeField(widget=forms.TimeInput(attrs={"type": "time"}))
     minutes = forms.IntegerField(min_value=15, max_value=480, label=_("Length (minutes)"))
     attendance = forms.ChoiceField(
@@ -160,6 +190,7 @@ class CounselorBookingForm(forms.Form):
         initial=Attendance.INDIVIDUAL,
         label=_("Who is coming"),
     )
+    meeting_url = MeetingLinkField()
 
     def __init__(self, *args, case, default_minutes=60, **kwargs):
         super().__init__(*args, **kwargs)
@@ -171,16 +202,128 @@ class CounselorBookingForm(forms.Form):
         self.fields["counselee"].queryset = case.counselees.order_by("last_name", "first_name")
         self.fields["counselee"].label_from_instance = lambda user: user.full_name
 
+    @property
+    def counselor_zone(self):
+        """The zone a typed time means. Always the counselor's.
+
+        They typed "Tuesday at 2" while looking at their own week, so their own two
+        o'clock is what they meant — even when the counselee is in another state and
+        will be shown the same appointment as eleven in the morning.
+        """
+        return self.case.counselor.zoneinfo
+
+
+class CounselorBookingForm(BookingDetailsForm):
+    """What a counselor sends when scheduling one appointment on someone's behalf.
+
+    A real date and time rather than a slot to click: a counselor fitting in an
+    urgent session is not choosing from the published hours, so there is no list to
+    pick from. ``services.book`` is called with ``enforce_availability=False``, and
+    the exclusion constraint is still the thing that stops a clash.
+    """
+
+    date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+
+    field_order = ["counselee", "date", "time", "minutes", "attendance", "meeting_url"]
+
     def clean(self):
         cleaned = super().clean()
         day, moment = cleaned.get("date"), cleaned.get("time")
         if day and moment:
-            # Combined in the *counselor's* zone: they typed "Tuesday at 2", and
-            # they meant their own two o'clock.
-            cleaned["start"] = datetime.combine(day, moment).replace(
-                tzinfo=self.case.counselor.zoneinfo
-            )
+            cleaned["start"] = datetime.combine(day, moment).replace(tzinfo=self.counselor_zone)
         return cleaned
+
+
+class RecurringBookingForm(BookingDetailsForm):
+    """What a counselor sends to put a weekly series in the diary.
+
+    A weekday instead of a date, because that is the shape of the arrangement being
+    made: "Tuesdays at two, for the next ten weeks" is one decision, and asking for
+    ten dates would be asking the counselor to do the arithmetic — including the
+    week the clocks change.
+
+    The first session is worked out here rather than typed: the soonest occurrence
+    of the chosen weekday whose start time has not already passed. A form that
+    accepted a start date as well would let a counselor book a series into last
+    month, and ``services.book_series`` walks forward from whatever it is given.
+    """
+
+    weekday = forms.TypedChoiceField(
+        choices=Weekday.choices,
+        coerce=int,
+        label=_("Day of the week"),
+        help_text=_("The first session is the next one of these that has not passed."),
+    )
+    occurrences = forms.IntegerField(
+        min_value=2,
+        max_value=MAX_SERIES_SESSIONS,
+        initial=8,
+        label=_("How many sessions?"),
+        help_text=_("Booked weekly from the first one."),
+    )
+
+    field_order = [
+        "counselee",
+        "weekday",
+        "time",
+        "minutes",
+        "occurrences",
+        "attendance",
+        "meeting_url",
+    ]
+
+    def clean(self):
+        cleaned = super().clean()
+        weekday, moment = cleaned.get("weekday"), cleaned.get("time")
+        if weekday is not None and moment:
+            cleaned["start"] = self._first_occurrence(weekday, moment)
+        return cleaned
+
+    def _first_occurrence(self, weekday: int, moment):
+        """The next ``weekday`` at ``moment``, in the counselor's own zone.
+
+        ``timezone.now()`` rather than a passed-in clock, and the comparison is
+        against the instant rather than the date: a counselor arranging Tuesdays at
+        two on a Tuesday morning means *today*, and one doing it on Tuesday evening
+        does not.
+        """
+        now = timezone.now()
+        today = now.astimezone(self.counselor_zone).date()
+        candidate = datetime.combine(
+            today + timedelta(days=(weekday - today.weekday()) % 7), moment
+        ).replace(tzinfo=self.counselor_zone)
+        if candidate <= now:
+            candidate += timedelta(days=7)
+        return candidate
+
+
+class MeetingLinkForm(forms.Form):
+    """Adding, changing or clearing the link for a session — or for the rest of a series.
+
+    Separate from the booking form because a counselor who was sent the link after
+    arranging the sessions is the ordinary case, not the exception. Clearing it is
+    the same action as setting it, which is why the field is not required.
+
+    ``apply_to_series`` is removed rather than merely unticked when the appointment
+    is not part of a series, so the page never asks a question with one answer.
+    """
+
+    meeting_url = MeetingLinkField()
+    apply_to_series = forms.BooleanField(
+        required=False,
+        initial=True,
+        label=_("Use this for the rest of the series too"),
+        help_text=_("Sessions that have already happened are left alone."),
+    )
+
+    def __init__(self, *args, in_a_series=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not in_a_series:
+            del self.fields["apply_to_series"]
+
+    @property
+    def applies_to_series(self) -> bool:
+        return bool(self.cleaned_data.get("apply_to_series"))
 
 
 class CancellationForm(forms.Form):

@@ -9,6 +9,24 @@
   <span class="status status-{{ booking.status }}">{{ booking.get_status_display }}</span>
 </p>
 
+{% comment %} The way into the session, above everything else on the page, because somebody
+   opening this five minutes beforehand is here for exactly one reason.
+
+   Only while the appointment is active: a link to the room for something cancelled is an
+   invitation to a meeting nobody is attending.
+
+   rel="noreferrer" is doing real work, not boilerplate. Without it the meeting provider
+   is sent this page's URL as the Referer, which hands a third party the appointment's
+   address; with target="_blank" it also needs noopener so the opened page cannot reach
+   back into this one. The CSP does not restrain an outbound link, so the attributes are
+   the whole of the protection. {% endcomment %}
+{% if booking.meeting_url and booking.is_active %}
+  <p class="join">
+    <a class="button" href="{{ booking.meeting_url }}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Join meeting</a>
+    <span class="muted">Opens in your meeting app. The link is the same every time.</span>
+  </p>
+{% endif %}
+
 <dl class="detail-list">
   <dt>Counselor</dt><dd>{{ booking.counselor.full_name }}</dd>
   {# Not counselee.full_name: on a joint appointment that names another member. #}
@@ -16,6 +34,11 @@
   <dt>Who is coming</dt><dd>{{ booking.get_attendance_display }}</dd>
   <dt>Case</dt><dd><a href="{% url 'counseling:case_detail' booking.case.public_id %}">{{ booking.case.label }}</a></dd>
   <dt>Length</dt><dd>{{ booking.duration_minutes }} minutes</dd>
+  <dt>Where</dt>
+  <dd>
+    {% if booking.is_virtual %}Online{% else %}In person{% endif %}
+    {% if booking.series_key %}<span class="badge">one of a weekly series</span>{% endif %}
+  </dd>
   {% if booking.status == 'cancelled' %}
     <dt>Cancelled</dt>
     <dd>
@@ -95,6 +118,11 @@
   {% endif %}
   {% if can_reschedule %}
     <a class="button" href="{% url 'scheduling:reschedule' booking.public_id %}">Move it</a>
+  {% endif %}
+  {% if can_set_meeting_link %}
+    <a class="button" href="{% url 'scheduling:meeting_link' booking.public_id %}">
+      {% if booking.meeting_url %}Change the meeting link{% else %}Add a meeting link{% endif %}
+    </a>
   {% endif %}
   {% if can_record_outcome %}
     <a class="button" href="{% url 'scheduling:outcome' booking.public_id %}">Record what happened</a>

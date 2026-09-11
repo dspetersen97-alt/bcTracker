@@ -100,6 +100,10 @@ class AuditVerb(models.TextChoices):
     BOOKING_COMPLETED = "booking.completed", "Session recorded as held"
     BOOKING_NO_SHOW = "booking.no_show", "Session recorded as missed"
     BOOKING_NOTE_UPDATED = "booking.note_updated", "Counselor note updated"
+    # Recorded because a meeting link is a way into a counseling session: "when did
+    # this appointment become virtual, and who made it so" is a question worth being
+    # able to answer. The link itself is never in the metadata.
+    BOOKING_MEETING_LINK_SET = "booking.meeting_link_set", "Meeting link set"
     BOOKING_REMINDER_SENT = "booking.reminder_sent", "Appointment reminder sent"
 
     AVAILABILITY_ADDED = "availability.added", "Office hours added"

@@ -804,6 +804,21 @@ MATRIX = {
             "financial_admin": 403,
         },
     ),
+    "scheduling:meeting_link": (
+        lambda s: {"public_id": s.booking.public_id},
+        "get",
+        # The admin 403 is the same asymmetry as the note, for a different reason:
+        # whoever sets the link decides which room a counseling session happens in,
+        # and an administrator who could change it could point a counselee at a
+        # meeting the counselor is not in. See scheduling/rules.py.
+        {
+            "anonymous": 302,
+            "counselor": 200,
+            "admin": 403,
+            "counselee": 403,
+            "financial_admin": 403,
+        },
+    ),
     # --- the Google connection ---
     #
     # The admin 403 on all five is the point, and it is the only place in this

@@ -17,6 +17,7 @@
   --accent-ink: #ffffff;
   --danger: #9b2226;
   --ok: #2f6b3f;
+  --warn: #9a6410;
   --radius: 6px;
 }
 
@@ -383,6 +384,43 @@ button.danger,
   border-color: var(--danger);
 }
 
+/* An action that is genuinely secondary to the one beside it — "set recurring" next
+   to the date, which changes the shape of the form rather than submitting it. Drawn
+   as an outline so it reads as an alternative to the primary button rather than as a
+   second thing to press. */
+button.quiet,
+.button.quiet {
+  color: var(--accent);
+  background: transparent;
+  font-weight: 600;
+}
+
+button.quiet:hover,
+.button.quiet:hover { background: var(--paper); filter: none; }
+
+/* A field with a control alongside it, for the one case that needs it: the date on
+   the scheduling page, with the link that turns it into a weekday. align-items:end
+   puts the button on the input's baseline rather than the label's, and the field
+   keeps flex:1 so the input is not squeezed by the length of the link's text. */
+.field-with-aside {
+  display: flex;
+  align-items: end;
+  gap: 0.6rem;
+}
+
+.field-with-aside .field { flex: 1 1 auto; margin-bottom: 0.9rem; }
+
+/* The way into a virtual session. Above the appointment's own details, because
+   somebody opening the page five minutes beforehand is here for this and nothing
+   else. */
+.join {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 0 0 1.25rem;
+}
+
 /* Actions on a row: a group of buttons and inline forms that should sit on one
    line with the same baseline. Always a <div>, never a <p>: a paragraph may not
    contain a form, and a browser that meets one closes the paragraph early — which
@@ -679,6 +717,9 @@ button.danger,
 
 .message-success { border-color: var(--ok); }
 .message-error { border-color: var(--danger); }
+/* Neither a failure nor a plain confirmation: the action worked and something about
+   it needs reading. A series that skipped two weeks is the case this exists for. */
+.message-warning { border-color: var(--warn); }
 
 /* --- two-factor enrolment --- */
 

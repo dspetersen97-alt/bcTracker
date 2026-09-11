@@ -81,6 +81,11 @@ def _context(booking, recipient, **extra):
         "when": _when(booking.starts_at, recipient.zoneinfo),
         "minutes": booking.duration_minutes,
         "is_joint": booking.is_joint,
+        # The one piece of the appointment that goes in the mail besides the time.
+        # It is not counseling content — it is a door, not what is said behind it —
+        # and putting it here is the point of the feature: somebody about to join a
+        # session from a phone should not have to sign in to find the link.
+        "meeting_url": booking.meeting_url,
         # reverse() rather than a literal path, so the route's shape stays the
         # URLconf's business. An appointment is addressed by its public id — see
         # apps/core/ids.py — and this link is the one a counselee is most likely to
@@ -115,6 +120,39 @@ def booking_created(booking) -> None:
         recipient=booking.counselor,
         context=_context(booking, booking.counselor),
     )
+
+
+def booking_series_scheduled(bookings) -> None:
+    """One email for a whole weekly series, listing the times.
+
+    One rather than one per appointment, and the reason is not only tidiness. Ten
+    near-identical messages for a single decision is the kind of mail people learn to
+    filter, and the appointment reminder that matters gets filtered with it. Workspace
+    SMTP also has a daily cap this would eat for no benefit.
+
+    Everything after the first appointment is addressed by the first one's link,
+    because a counselee following a link from this email wants the next session and
+    every appointment page carries the rest of the case's diary anyway.
+    """
+    if not bookings:
+        return
+
+    first = bookings[0]
+    for attendee in _attendees(first):
+        _send(
+            template="booking_series_scheduled",
+            subject="Your counselor has scheduled a series of appointments",
+            recipient=attendee,
+            context=_context(
+                first,
+                attendee,
+                # Formatted per recipient, in their own zone, for the reason the
+                # module docstring gives. A list of strings rather than of bookings,
+                # so the template cannot reach through one into anything else.
+                sessions=[_when(booking.starts_at, attendee.zoneinfo) for booking in bookings],
+                session_count=len(bookings),
+            ),
+        )
 
 
 def booking_confirmed(booking) -> None:

@@ -1,7 +1,7 @@
 """
 Scheduling routes.
 
-Appointments are addressed by their own primary key, like documents, because the
+Appointments are addressed by their own public id, like documents, because the
 scoping layer decides reachability and a case id in the path would be decoration
 a view might be tempted to trust. The two case-keyed routes are the ones where the
 case really is the subject: booking into it, and its own diary.
@@ -51,6 +51,11 @@ urlpatterns = [
     path("appointments/<publicid:public_id>/reschedule/", views.reschedule, name="reschedule"),
     path("appointments/<publicid:public_id>/outcome/", views.outcome, name="outcome"),
     path("appointments/<publicid:public_id>/note/", views.note, name="note"),
+    path(
+        "appointments/<publicid:public_id>/meeting-link/",
+        views.meeting_link,
+        name="meeting_link",
+    ),
     # Keyed by a case, because the case is the subject.
     path(
         "cases/<publicid:case_public_id>/appointments/",

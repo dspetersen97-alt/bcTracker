@@ -27,7 +27,9 @@ already been told about.
 
 import logging
 from datetime import datetime, time, timedelta
+from uuid import uuid4
 
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, OperationalError, transaction
 from django.db.backends.postgresql.psycopg_any import DateTimeTZRange
 from django.db.models import Q
@@ -40,6 +42,7 @@ from apps.counseling.models import CounselorProfile
 from apps.scheduling import notify, slots
 from apps.scheduling.models import (
     ACTIVE_STATUSES,
+    MAX_SERIES_SESSIONS,
     Attendance,
     AvailabilityOverride,
     AvailabilityRule,
@@ -314,6 +317,7 @@ def book(
     minutes=None,
     attendance=Attendance.INDIVIDUAL,
     request_note="",
+    meeting_url="",
     created_by,
     enforce_availability=True,
     request=None,
@@ -328,6 +332,48 @@ def book(
 
     Raises ``SlotUnavailable`` if the time is taken and ``NotBookable`` if it was
     never on offer.
+    """
+    booking = _insert_booking(
+        case=case,
+        counselee=counselee,
+        start=start,
+        minutes=minutes,
+        attendance=attendance,
+        request_note=request_note,
+        meeting_url=meeting_url,
+        created_by=created_by,
+        enforce_availability=enforce_availability,
+        request=request,
+    )
+    notify.booking_created(booking)
+    _push_to_google(booking)
+    return booking
+
+
+def _insert_booking(
+    *,
+    case,
+    counselee,
+    start,
+    minutes=None,
+    attendance=Attendance.INDIVIDUAL,
+    request_note="",
+    meeting_url="",
+    series_key=None,
+    created_by,
+    enforce_availability=True,
+    request=None,
+):
+    """Write one appointment and record it. No email, no calendar push.
+
+    Split from ``book`` for the sake of ``book_series``, which needs ten rows and
+    *one* email. Sending one confirmation per appointment would put ten near
+    identical messages in a counselee's inbox for a single decision, and Workspace
+    SMTP has a daily cap that a term of counseling for a handful of cases would
+    reach on its own.
+
+    The audit row is written here rather than by the caller, so a series cannot end
+    up with appointments that nothing in the trail says were created.
     """
     counselor = case.counselor
     minutes = minutes or BookingWindow(counselor).session_minutes
@@ -349,6 +395,8 @@ def book(
             BookingStatus.CONFIRMED if created_by.is_ministry_staff else BookingStatus.REQUESTED
         ),
         request_note=request_note,
+        meeting_url=meeting_url,
+        series_key=series_key,
         created_by=created_by,
     )
     _validate(booking)
@@ -379,10 +427,171 @@ def book(
         minutes=minutes,
         attendance=attendance,
         status=booking.status,
+        # Whether the session is virtual, never the link itself. The trail is read
+        # by people who are not expected at the appointment, and a meeting link is a
+        # way into the room.
+        is_virtual=bool(meeting_url),
+        series=str(series_key) if series_key else None,
     )
-    notify.booking_created(booking)
-    _push_to_google(booking)
     return booking
+
+
+class Series:
+    """What came of booking a weekly series: the appointments made, and the weeks missed.
+
+    A small object rather than a tuple because the caller has to tell the counselor
+    both halves, and a bare ``(bookings, skipped)`` at three call sites is how one of
+    them ends up reporting only the first.
+    """
+
+    def __init__(self, bookings, skipped):
+        #: In diary order.
+        self.bookings = bookings
+        #: ``(date, reason)`` for each week that could not be booked, in order.
+        self.skipped = skipped
+
+    @property
+    def first(self):
+        return self.bookings[0] if self.bookings else None
+
+    def __len__(self) -> int:
+        return len(self.bookings)
+
+
+def book_series(
+    *,
+    case,
+    counselee,
+    start,
+    occurrences: int,
+    minutes=None,
+    attendance=Attendance.INDIVIDUAL,
+    meeting_url="",
+    created_by,
+    request=None,
+):
+    """Book the same time every week, starting at ``start``. Returns a ``Series``.
+
+    **Each week is a separate appointment, and that is the design.** A recurring
+    arrangement in a counseling diary is not one event with a repeat rule: week
+    three gets moved to the Thursday, week five is cancelled with two days' notice
+    and may be chargeable, week seven is the one somebody sent their homework in for.
+    All of that hangs off a Booking, so a series is ten Bookings sharing a key rather
+    than a rule that has to be expanded before anything can be recorded against it.
+
+    **A week that clashes is skipped, not fatal.** Refusing the whole series because
+    the counselor already has something in week six would leave them to work out
+    which week, book nine by hand, and mean the feature is only usable on an empty
+    diary. What the caller gets back says which weeks were missed, and telling the
+    counselor is its job.
+
+    **The time is held in wall-clock terms.** Each week is rebuilt by combining a
+    date with the counselor's local time rather than by adding seven days to the
+    previous instant, so "Tuesdays at two" is still two o'clock after the clocks
+    change. Adding ``timedelta(weeks=1)`` to an aware datetime would drift by an hour
+    for half the year, and the counselee would be the one who noticed.
+    """
+    if occurrences < 1:
+        raise SchedulingError(_("A series needs at least one session."))
+    if occurrences > MAX_SERIES_SESSIONS:
+        raise SchedulingError(
+            _("A series can be at most %(limit)s sessions.") % {"limit": MAX_SERIES_SESSIONS}
+        )
+
+    zone = case.counselor.zoneinfo
+    local = start.astimezone(zone)
+    series_key = uuid4()
+
+    booked, skipped = [], []
+    for index in range(occurrences):
+        day = local.date() + timedelta(weeks=index)
+        when = datetime.combine(day, local.time()).replace(tzinfo=zone)
+        try:
+            booked.append(
+                _insert_booking(
+                    case=case,
+                    counselee=counselee,
+                    start=when,
+                    minutes=minutes,
+                    attendance=attendance,
+                    meeting_url=meeting_url,
+                    series_key=series_key,
+                    created_by=created_by,
+                    # A counselor's series is not bound by their published hours, for
+                    # the same reason a single booking of theirs is not.
+                    enforce_availability=False,
+                    request=request,
+                )
+            )
+        except SchedulingError as exc:
+            logger.info("Week %s of a series was not booked: %s", day, exc)
+            skipped.append((day, str(exc)))
+
+    if not booked:
+        # Nothing was written, so there is nothing to tell anybody about and the
+        # counselor needs the reason rather than a summary of a series that is not
+        # there. The first week's refusal is the one that explains it.
+        raise SlotUnavailable(skipped[0][1] if skipped else None)
+
+    notify.booking_series_scheduled(booked)
+    for booking in booked:
+        _push_to_google(booking)
+    return Series(booked, skipped)
+
+
+def set_meeting_link(booking, *, actor, meeting_url, apply_to_series=False, request=None):
+    """Set, change or clear where a session is held. Returns how many rows changed.
+
+    ``apply_to_series`` covers the ordinary case: a counselor arranges ten Tuesdays
+    and is sent the room link afterwards. Only appointments that are still active and
+    still ahead are touched — rewriting the link on a session that has already
+    happened would edit a record of the past to no purpose, and on a cancelled one it
+    would be an invitation to a meeting nobody is going to.
+
+    The field validates itself rather than the caller being trusted. ``Field.clean``
+    rather than ``Booking.full_clean``, which would also re-check the exclusion
+    constraints with a query and could refuse an appointment already in the diary
+    over something that has nothing to do with its link.
+    """
+    field = Booking._meta.get_field("meeting_url")
+    try:
+        meeting_url = field.clean(meeting_url, booking)
+    except ValidationError as exc:
+        raise SchedulingError(" ".join(str(message) for message in exc.messages)) from exc
+
+    booking.meeting_url = meeting_url
+    booking.save(update_fields=["meeting_url", "updated_at"])
+    changed = [booking]
+
+    if apply_to_series and booking.series_key is not None:
+        now = timezone.now()
+        siblings = (
+            booking.series_appointments()
+            .exclude(pk=booking.pk)
+            .filter(status__in=ACTIVE_STATUSES, slot__endswith__gt=now)
+        )
+        for sibling in siblings:
+            sibling.meeting_url = meeting_url
+            sibling.save(update_fields=["meeting_url", "updated_at"])
+            changed.append(sibling)
+
+    for changed_booking in changed:
+        record(
+            AuditVerb.BOOKING_MEETING_LINK_SET,
+            actor=actor,
+            target=changed_booking,
+            request=request,
+            case_id=changed_booking.case_id,
+            starts_at=changed_booking.starts_at.isoformat(),
+            # Whether there is now a link, and never the link. See _insert_booking.
+            is_virtual=bool(meeting_url),
+            # So the trail shows that one action changed six appointments rather than
+            # six unexplained edits a second apart.
+            series=str(changed_booking.series_key) if changed_booking.series_key else None,
+        )
+    for changed_booking in changed:
+        _push_to_google(changed_booking)
+    return len(changed)
 
 
 def confirm(booking, *, actor, request=None):
@@ -620,8 +829,6 @@ def _validate(booking) -> None:
     sentence to show a counselee. The database enforces the constraints where they
     cannot be raced; ``_refusal_for`` turns the refusal into English.
     """
-    from django.core.exceptions import ValidationError
-
     try:
         booking.full_clean(validate_constraints=False)
     except ValidationError as exc:

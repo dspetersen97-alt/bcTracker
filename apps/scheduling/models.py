@@ -27,6 +27,7 @@ even against code written later that forgets to look.
 """
 
 from datetime import timedelta
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 from django.conf import settings
@@ -72,6 +73,38 @@ class BookingStatus(models.TextChoices):
 #: Statuses that hold a place in the diary. Everything else has released it, which
 #: is why the exclusion constraints below are conditional on this set.
 ACTIVE_STATUSES = (BookingStatus.REQUESTED, BookingStatus.CONFIRMED)
+
+
+#: The longest weekly series a counselor may book in one go. A term of counseling
+#: is a dozen sessions or so; the cap is here because "how many sessions?" is a
+#: number typed into a box, and a slip of the finger should not put four hundred
+#: appointments in a diary and send an email about them.
+MAX_SERIES_SESSIONS = 52
+
+
+def validate_meeting_link(value):
+    """A meeting link has to be ``https``, and only that.
+
+    ``URLField`` already refuses ``javascript:`` — its validator allows only
+    http, https, ftp and ftps — so this is not what stops a link from becoming a
+    script. It stops the other two:
+
+      * **http**, because the page it is rendered on is served over TLS and a
+        counseling session joined over a plain connection is a counseling session
+        anybody on the network can join. Every provider a ministry would use
+        offers https, so nothing legitimate is refused.
+      * **ftp**, which cannot possibly be a meeting and would only ever be a
+        pasted mistake or an attempt to see what the field accepts.
+
+    Validated on the model rather than only on the form, because the form is not
+    the only way a row is written — the recurring-series service copies the value
+    onto every appointment it creates, and ``full_clean`` is what makes that copy
+    honest.
+    """
+    if not value:
+        return
+    if urlsplit(value).scheme != "https":
+        raise ValidationError(_("A meeting link has to start with https:// ."))
 
 
 class Attendance(models.TextChoices):
@@ -358,6 +391,37 @@ class Booking(PublicIdModel, TimeStampedModel):
         db_index=True,
     )
 
+    # Where a virtual session happens. Not counseling content — it is a room, not
+    # what is said in it — so unlike the notes it is shown to everybody expected at
+    # the appointment and put in the email about it, which is the whole point: a
+    # counselee should not have to sign in to find out how to join.
+    #
+    # A stored link and not a generated one. bcTracker does not run a meeting
+    # service and will not become an OAuth client of one to create rooms on a
+    # counselor's behalf; the counselor pastes the link their own provider gave
+    # them, and that keeps this feature to a field.
+    meeting_url = models.URLField(
+        max_length=500,
+        blank=True,
+        validators=[validate_meeting_link],
+        verbose_name=_("Meeting link"),
+        help_text=_("Optional. A https:// link the counselee can click to join."),
+    )
+
+    # Which weekly series this appointment belongs to, if any. Shared by every
+    # appointment booked in one recurring run.
+    #
+    # A key on each row rather than a parent table, because a series is not a thing
+    # that exists in its own right: each appointment is booked, confirmed, moved,
+    # cancelled and billed on its own, and one that has been moved to a Thursday is
+    # still one of the ten the counselor arranged. A parent row would invite code to
+    # treat the series as the unit and then have to special-case every appointment
+    # that stopped matching it.
+    #
+    # A UUID rather than a public id: this never appears in a URL, and nothing is
+    # addressed by it.
+    series_key = models.UUIDField(null=True, blank=True, editable=False, db_index=True)
+
     # What the counselee wrote when booking. Counseling content, so it is behind
     # its own permission and never rendered for financial_admin.
     request_note = models.TextField(blank=True, help_text=_("Anything your counselor should know."))
@@ -495,6 +559,23 @@ class Booking(PublicIdModel, TimeStampedModel):
     @property
     def is_joint(self) -> bool:
         return self.attendance == Attendance.WHOLE_CASE
+
+    @property
+    def is_virtual(self) -> bool:
+        return bool(self.meeting_url)
+
+    def series_appointments(self):
+        """Every appointment booked in the same recurring run as this one.
+
+        Unscoped, and only ever used for a counselor's own writes — applying a
+        meeting link to the rest of a series they arranged. A read for a counselee
+        goes through ``for_actor`` like everything else; a series is not a way round
+        the scoping layer, which is why this returns a queryset rather than a list
+        and why no view hands it to a template.
+        """
+        if self.series_key is None:
+            return Booking.objects.none()
+        return Booking.objects.filter(series_key=self.series_key).order_by("slot")
 
     def hours_until(self, *, now=None) -> float:
         now = now or timezone.now()

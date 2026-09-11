@@ -1,0 +1,22 @@
+{% autoescape off %}Hello{% if recipient.first_name %} {{ recipient.first_name }}{% endif %},
+
+{{ counselor_name }} has scheduled {{ session_count }} appointments for you, one a week:
+{% for session in sessions %}
+  {{ session }} ({{ minutes }} minutes){% endfor %}
+{% if is_joint %}
+Everyone on the case is expected at these.
+{% endif %}{% if meeting_url %}
+These are virtual sessions. You can join here:
+
+{{ meeting_url }}
+{% endif %}
+The first one, and each of the others, is here:
+
+{{ url }}
+
+If one of those times does not work, you can cancel it from its own page — the
+rest stand.
+
+bcTracker
+{{ site_url }}
+{% endautoescape %}

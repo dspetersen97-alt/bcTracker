@@ -164,6 +164,19 @@ rules.add_perm(
 # view_booking_note) but has no business authoring a session note they were not at.
 rules.add_perm("scheduling.change_booking_note", is_the_booked_counselor)
 
+# Saying where a virtual session is held. The counselor alone, and unlike almost
+# everything else on a booking an admin is excluded.
+#
+# The link is a way into the room. Whoever sets it decides which room a counseling
+# session happens in, and an administrator who could change it could point a
+# counselee at a meeting the counselor is not in — a substitution the counselee has
+# no way to detect, since the link arrives in a legitimate email from the ministry.
+# Nobody but the person holding the session needs that, so nobody but them has it.
+#
+# Gated on the appointment still being active: setting up a room for something
+# cancelled is either a mistake or an invitation to a meeting nobody attends.
+rules.add_perm("scheduling.set_meeting_link", is_the_booked_counselor & booking_is_still_active)
+
 # Deleting an appointment is not a permission anyone holds. Appointments are
 # cancelled, and a cancellation — especially a late one — is part of the record.
 rules.add_perm("scheduling.delete_booking", rules.predicate(lambda user, booking: False))

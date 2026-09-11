@@ -4,7 +4,11 @@ An appointment has been moved.
 
   Was: {{ previously }}
   Now: {{ when }} ({{ minutes }} minutes)
+{% if meeting_url %}
+This is a virtual session. You can join here:
 
+{{ meeting_url }}
+{% endif %}
 Please make a note of the new time — this replaces any reminder you have already
 had.
 

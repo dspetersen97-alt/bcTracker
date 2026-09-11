@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Meeting link — bcTracker{% endblock %}
+
+{% block content %}
+<h1>Meeting link</h1>
+<p class="role">
+  <a href="{% url 'scheduling:detail' booking.public_id %}">{{ booking.starts_at|date:"l j F Y" }}, {{ booking.starts_at|time:"g:i a" }}</a>
+</p>
+
+<form method="post" class="stacked">
+  {% csrf_token %}
+  {% include "includes/form.html" %}
+  <div class="actions">
+    <button type="submit">Save</button>
+    <a href="{% url 'scheduling:detail' booking.public_id %}">Go back</a>
+  </div>
+</form>
+
+<div class="card">
+  {% if in_a_series %}
+    <p class="muted">
+      This is one of {{ series_remaining }} sessions still to come in a weekly series.
+      Leave the box ticked to use the same link for all of them; sessions that have
+      already happened are left as they are.
+    </p>
+  {% endif %}
+  <p class="muted">
+    Paste the link your own meeting provider gave you — Zoom, Google Meet, Teams. It has
+    to start with <code>https://</code>. Everyone expected at the appointment sees it on
+    that page and gets it in their reminder, so treat it as you would the door code to
+    the office: anybody holding the link can join the session.
+  </p>
+  <p class="muted">Clearing the box makes this an in-person appointment again.</p>
+</div>
+{% endblock %}

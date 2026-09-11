@@ -1,0 +1,23 @@
+{% comment %} One form field. Split out of includes/form.html so a page that has to lay a
+   control out beside a particular field — the "set recurring" link next to the date on
+   the scheduling page — can place fields itself without reimplementing how errors and
+   help text are shown.
+
+   A div rather than a p: widgets that render a list of choices emit their own divs,
+   which a browser would close the paragraph around. And those widgets get a fieldset
+   and a legend instead of a label, because a label pointing at a group of checkboxes
+   points at nothing a screen reader can focus. ``use_fieldset`` is Django's own answer
+   to which is which. {% endcomment %}
+<div class="field field-{{ field.widget_type }}{% if field.errors %} field-invalid{% endif %}">
+  {% if field.use_fieldset %}
+    <fieldset>
+      <legend>{{ field.label }}</legend>
+      {{ field }}
+    </fieldset>
+  {% else %}
+    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+    {{ field }}
+  {% endif %}
+  {% if field.help_text %}<span class="help">{{ field.help_text }}</span>{% endif %}
+  {% for error in field.errors %}<span class="error">{{ error }}</span>{% endfor %}
+</div>

@@ -5,6 +5,10 @@ A reminder about your appointment with {{ counselor_name }}:
   {{ when }} ({{ minutes }} minutes)
 {% if is_joint %}
 Everyone on the case is expected at this one.
+{% endif %}{% if meeting_url %}
+This is a virtual session. You can join here:
+
+{{ meeting_url }}
 {% endif %}
 If you cannot make it, please cancel as early as you can so the time can go to
 somebody else:

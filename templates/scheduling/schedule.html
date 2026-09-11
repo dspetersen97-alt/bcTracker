@@ -1,15 +1,38 @@
 {% extends "base.html" %}
-{% block title %}Schedule an appointment — bcTracker{% endblock %}
+{% block title %}{% if recurring %}Schedule weekly appointments{% else %}Schedule an appointment{% endif %} — bcTracker{% endblock %}
 
 {% block content %}
-<h1>Schedule an appointment</h1>
+<h1>{% if recurring %}Schedule weekly appointments{% else %}Schedule an appointment{% endif %}</h1>
 <p class="role"><a href="{% url 'counseling:case_detail' case.public_id %}">{{ case.label }}</a></p>
 
+{% comment %} Fields are placed one at a time rather than looped, so the recurring control
+   can sit beside the field it replaces. There is no JavaScript in this application, so
+   "Set recurring" is a link that renders the same page with a weekday where the date
+   was; the form's empty action posts back to this URL including its query string, which
+   is what keeps the mode after a validation error. {% endcomment %}
 <form method="post" class="stacked">
   {% csrf_token %}
-  {% include "includes/form.html" %}
+  {% include "includes/form_errors.html" %}
+  {% include "includes/field.html" with field=form.counselee %}
+
+  <div class="field-with-aside">
+    {% if recurring %}
+      {% include "includes/field.html" with field=form.weekday %}
+      <a class="button quiet" href="{% url 'scheduling:schedule' case.public_id %}">Just one appointment</a>
+    {% else %}
+      {% include "includes/field.html" with field=form.date %}
+      <a class="button quiet" href="?repeat=weekly">Set recurring</a>
+    {% endif %}
+  </div>
+
+  {% include "includes/field.html" with field=form.time %}
+  {% include "includes/field.html" with field=form.minutes %}
+  {% if recurring %}{% include "includes/field.html" with field=form.occurrences %}{% endif %}
+  {% include "includes/field.html" with field=form.attendance %}
+  {% include "includes/field.html" with field=form.meeting_url %}
+
   <div class="actions">
-    <button type="submit">Book it</button>
+    <button type="submit">{% if recurring %}Book the series{% else %}Book it{% endif %}</button>
     <a href="{% url 'scheduling:case_appointments' case.public_id %}">Cancel</a>
   </div>
 </form>
@@ -21,9 +44,22 @@
     fitting somebody in. You will still be stopped from booking over something already
     in your diary, or over an appointment the counselee has elsewhere.
   </p>
+  {% if recurring %}
+    <p class="muted">
+      Each week is a separate appointment, so any one of them can be moved or cancelled
+      without touching the rest. A week whose time is already taken is skipped and you
+      will be told which. One email goes out covering the whole series.
+    </p>
+  {% else %}
+    <p class="muted">
+      Booking on someone's behalf confirms the appointment straight away, and everyone
+      attending is emailed.
+    </p>
+  {% endif %}
   <p class="muted">
-    Booking on someone's behalf confirms the appointment straight away, and everyone
-    attending is emailed.
+    A meeting link is optional. Add one and the counselee gets a “Join meeting” button on
+    the appointment page and the link in their email; leave it blank for a session in the
+    office.
   </p>
 </div>
 {% endblock %}

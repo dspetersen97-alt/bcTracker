@@ -44,6 +44,8 @@ from apps.scheduling.forms import (
     CancellationForm,
     CounselorBookingForm,
     CounselorNoteForm,
+    MeetingLinkForm,
+    RecurringBookingForm,
     SessionOutcomeForm,
 )
 from apps.scheduling.models import (
@@ -383,43 +385,98 @@ def _parse_slot(raw):
     return when if when.tzinfo is not None else None
 
 
+#: The query value that puts the scheduling page in weekly-series mode.
+#:
+#: A query parameter rather than a script toggling fields, because there is no
+#: JavaScript in this application at all. "Set recurring" is therefore a link that
+#: re-renders the same page with a weekday where the date was, and the form posts
+#: back to the URL it was rendered from — an empty ``action`` keeps the query string,
+#: so the mode survives a validation error without a hidden field to forge.
+REPEAT_WEEKLY = "weekly"
+
+
 @login_required
 @require_http_methods(["GET", "POST"])
 def schedule(request, case_public_id):
-    """A counselor putting an appointment in the diary directly.
+    """A counselor putting an appointment, or a weekly series of them, in the diary.
 
     Not restricted to the published office hours — an urgent session on a Saturday
     is a real thing, and the hours exist to tell counselees what to ask for rather
-    than to overrule the counselor. The clash constraint still applies.
+    than to overrule the counselor. The clash constraint still applies, and in the
+    recurring case it applies week by week: a series steps over a week that is
+    already taken rather than refusing the whole arrangement.
     """
     case = visible_case_or_404(request, case_public_id)
     require_perm(request, "counseling.change_case", case)
     require_perm(request, "scheduling.add_booking", case)
 
     window = services.BookingWindow(case.counselor)
-    form = CounselorBookingForm(
-        request.POST or None, case=case, default_minutes=window.session_minutes
-    )
+    recurring = request.GET.get("repeat") == REPEAT_WEEKLY
+    form_class = RecurringBookingForm if recurring else CounselorBookingForm
+    form = form_class(request.POST or None, case=case, default_minutes=window.session_minutes)
 
     if request.method == "POST" and form.is_valid():
         try:
-            booking = services.book(
-                case=case,
-                counselee=form.cleaned_data["counselee"],
-                start=form.cleaned_data["start"],
-                minutes=form.cleaned_data["minutes"],
-                attendance=form.cleaned_data["attendance"],
-                created_by=request.user,
-                enforce_availability=False,
-                request=request,
+            booking = (
+                _book_series(request, case, form)
+                if recurring
+                else services.book(
+                    case=case,
+                    counselee=form.cleaned_data["counselee"],
+                    start=form.cleaned_data["start"],
+                    minutes=form.cleaned_data["minutes"],
+                    attendance=form.cleaned_data["attendance"],
+                    meeting_url=form.cleaned_data["meeting_url"],
+                    created_by=request.user,
+                    enforce_availability=False,
+                    request=request,
+                )
             )
         except services.SchedulingError as exc:
             form.add_error(None, str(exc))
         else:
-            messages.success(request, _("Booked. Everyone attending has been emailed."))
+            if not recurring:
+                messages.success(request, _("Booked. Everyone attending has been emailed."))
             return redirect("scheduling:detail", public_id=booking.public_id)
 
-    return render(request, "scheduling/schedule.html", {"case": case, "form": form})
+    return render(
+        request,
+        "scheduling/schedule.html",
+        {"case": case, "form": form, "recurring": recurring},
+    )
+
+
+def _book_series(request, case, form):
+    """Book the series and say what happened. Returns the first appointment.
+
+    The messages are the whole reason this is not inline: a series that booked eight
+    of ten weeks is a success *and* something the counselor has to know about, so it
+    gets both a success line and a warning naming the weeks that were skipped. Left
+    to a single "Booked." the counselor would find the two gaps in December.
+    """
+    series = services.book_series(
+        case=case,
+        counselee=form.cleaned_data["counselee"],
+        start=form.cleaned_data["start"],
+        occurrences=form.cleaned_data["occurrences"],
+        minutes=form.cleaned_data["minutes"],
+        attendance=form.cleaned_data["attendance"],
+        meeting_url=form.cleaned_data["meeting_url"],
+        created_by=request.user,
+        request=request,
+    )
+    messages.success(
+        request,
+        _("Booked %(count)s weekly sessions. Everyone attending has been emailed once.")
+        % {"count": len(series)},
+    )
+    if series.skipped:
+        messages.warning(
+            request,
+            _("These weeks were skipped because the time was already taken: %(dates)s.")
+            % {"dates": ", ".join(day.strftime("%d %b %Y") for day, _reason in series.skipped)},
+        )
+    return series.first
 
 
 @login_required
@@ -540,6 +597,7 @@ def detail(request, public_id):
             # read a session note but has no business authoring one.
             "can_edit_note": show_notes
             and request.user.has_perm("scheduling.change_booking_note", booking),
+            "can_set_meeting_link": request.user.has_perm("scheduling.set_meeting_link", booking),
             "late_if_cancelled": booking.is_active
             and booking.hours_until() < services.BookingWindow(booking.counselor).notice_hours,
         },
@@ -630,9 +688,12 @@ def reschedule(request, public_id):
         },
     )
     # Who is attending is not what rescheduling changes, and offering the field
-    # here would let a move quietly become a reassignment.
+    # here would let a move quietly become a reassignment. The meeting link goes for
+    # the same reason and has its own page: a form that silently blanked a room link
+    # because the field rendered empty would be a bad way to move an appointment.
     del form.fields["counselee"]
     del form.fields["attendance"]
+    del form.fields["meeting_url"]
 
     if request.method == "POST" and form.is_valid():
         try:
@@ -729,3 +790,62 @@ def note(request, public_id):
         return redirect("scheduling:detail", public_id=booking.public_id)
 
     return render(request, "scheduling/note.html", {"booking": booking, "form": form})
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def meeting_link(request, public_id):
+    """Where a virtual session is held, and optionally where the rest of the series is.
+
+    Its own page rather than a field on the reschedule form, because the ordinary
+    case is a counselor who arranged ten Tuesdays and was sent the room link
+    afterwards. Counselor only — see ``scheduling.set_meeting_link`` for why an
+    administrator is excluded from this one.
+    """
+    booking = visible_booking_or_404(request, public_id)
+    require_perm(request, "scheduling.set_meeting_link", booking)
+
+    # Only worth asking about when there is a series to apply it to, and only when
+    # some of it is still ahead: offering to rewrite the link on nine sessions that
+    # have already happened is offering to do nothing.
+    remaining_in_series = booking.series_appointments().active().upcoming().exclude(pk=booking.pk)
+    in_a_series = remaining_in_series.exists()
+
+    form = MeetingLinkForm(
+        request.POST or None,
+        in_a_series=in_a_series,
+        initial={"meeting_url": booking.meeting_url},
+    )
+    if request.method == "POST" and form.is_valid():
+        try:
+            changed = services.set_meeting_link(
+                booking,
+                actor=request.user,
+                meeting_url=form.cleaned_data["meeting_url"],
+                apply_to_series=in_a_series and form.applies_to_series,
+                request=request,
+            )
+        except services.SchedulingError as exc:
+            form.add_error(None, str(exc))
+        else:
+            if not form.cleaned_data["meeting_url"]:
+                messages.success(request, _("Meeting link removed."))
+            elif changed > 1:
+                messages.success(
+                    request,
+                    _("Meeting link saved for %(count)s sessions.") % {"count": changed},
+                )
+            else:
+                messages.success(request, _("Meeting link saved."))
+            return redirect("scheduling:detail", public_id=booking.public_id)
+
+    return render(
+        request,
+        "scheduling/meeting_link.html",
+        {
+            "booking": booking,
+            "form": form,
+            "in_a_series": in_a_series,
+            "series_remaining": remaining_in_series.count() + 1,
+        },
+    )
