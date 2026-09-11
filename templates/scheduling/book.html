@@ -9,7 +9,7 @@
 </p>
 
 {% if chosen and form %}
-  {# Step two. The time is fixed by now, so the only thing left is the note. #}
+  {# Step three. The time is fixed by now, so the only thing left is the note. #}
   <div class="card">
     <h2>{{ chosen|date:"l j F Y" }} at {{ chosen|time:"g:i a" }}</h2>
     <p class="muted">{{ window.session_minutes }} minutes, shown in your timezone ({{ viewer_zone }}).</p>
@@ -19,7 +19,7 @@
       {% include "includes/form.html" %}
       <div class="actions">
         <button type="submit">Request this time</button>
-        <a href="{% url 'scheduling:book' case.public_id %}?from={{ start_date|date:'Y-m-d' }}">Pick a different time</a>
+        <a href="{% url 'scheduling:book' case.public_id %}?day={{ chosen|date:'Y-m-d' }}">Pick a different time</a>
       </div>
     </form>
     <p class="muted">
@@ -38,8 +38,8 @@
 
 {% if not chosen %}
   {% if form %}
-    {% comment %} The chosen time fell through — taken, or no longer offered. The list below is
-       regenerated, so it no longer contains it. {% endcomment %}
+    {% comment %} The chosen time fell through — taken, or no longer offered. The calendar and the
+       list below are regenerated, so it is no longer in either of them. {% endcomment %}
     <ul class="errors" role="alert">
       {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
     </ul>
@@ -51,10 +51,57 @@
     hours' notice.
   </p>
 
-  <nav class="pager" aria-label="Weeks">
-    <a href="?from={{ previous_from|date:'Y-m-d' }}">Earlier</a>
-    <a href="?from={{ next_from|date:'Y-m-d' }}">Later</a>
+  <nav class="pager" aria-label="Months">
+    {% comment %} Plain text rather than a disabled link at each end of the range: there is
+       nothing to click, and a link that does nothing is worse than no link. {% endcomment %}
+    {% if previous_month %}
+      <a href="?month={{ previous_month|date:'Y-m' }}">Earlier</a>
+    {% else %}
+      <span class="muted">Earlier</span>
+    {% endif %}
+    {% if next_month %}
+      <a href="?month={{ next_month|date:'Y-m' }}">Later</a>
+    {% else %}
+      <span class="muted">Later</span>
+    {% endif %}
   </nav>
+
+  {% comment %} A table, because a month grid is tabular data: seven named columns and a row per
+     week. A stack of divs would leave a screen reader with forty-two numbers and no way to
+     know which one is a Thursday.
+
+     A day worth clicking says how many times are on it. The highlight is the second
+     signal rather than the only one, the same rule the status colours follow: somebody
+     reading this on a phone in sunlight should not have to tell two greens apart. {% endcomment %}
+  <table class="calendar">
+    <caption>{{ month|date:"F Y" }}</caption>
+    <thead>
+      <tr>
+        {% for short, full in weekdays %}
+          <th scope="col"><abbr title="{{ full }}">{{ short }}</abbr></th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for week in calendar %}
+        <tr>
+          {% for cell in week %}
+            <td class="cal-cell{% if not cell.in_month %} cal-outside{% endif %}{% if cell.is_today %} cal-today{% endif %}{% if cell.is_selected %} cal-selected{% endif %}"
+                {% if cell.is_today %}aria-current="date"{% endif %}>
+              {% if cell.is_available %}
+                <a class="cal-day cal-open" href="?day={{ cell.date|date:'Y-m-d' }}">
+                  <span class="cal-date">{{ cell.date.day }}</span>
+                  <span class="cal-count">{{ cell.slot_count }} time{{ cell.slot_count|pluralize }}</span>
+                </a>
+              {% else %}
+                <span class="cal-day"><span class="cal-date">{{ cell.date.day }}</span></span>
+              {% endif %}
+            </td>
+          {% endfor %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 
   {% for day, day_slots in days %}
     <section class="day">
@@ -64,8 +111,7 @@
           {% comment %} A link, not a form: choosing a time changes nothing yet, and a GET means
              the back button works the way people expect it to. {% endcomment %}
           <li>
-            <a class="button slot"
-               href="?slot={{ slot.start|date:'c'|urlencode }}&amp;from={{ start_date|date:'Y-m-d' }}">
+            <a class="button slot" href="?slot={{ slot.start|date:'c'|urlencode }}">
               {{ slot.start|time:"g:i a" }}
             </a>
           </li>
@@ -73,12 +119,18 @@
       </ul>
     </section>
   {% empty %}
-    {% comment %} Deliberately vague about *why*. "Your counselor is away" or "that hour is
-       taken" would both say something about somebody else's diary. {% endcomment %}
-    <p class="empty">
-      No times available in this period. Try a later week, or send your counselor a
-      message.
-    </p>
+    {% comment %} Deliberately vague about *why* a month is empty. "Your counselor is away" or
+       "that hour is taken" would both say something about somebody else's diary. Two
+       messages, because "nothing in April" and "nothing at all" call for different next
+       steps and one wording for both would send somebody paging through blank months. {% endcomment %}
+    {% if any_times_at_all %}
+      <p class="empty">Nothing free in {{ month|date:"F" }}. Try another month.</p>
+    {% else %}
+      <p class="empty">
+        No times available at the moment. Send your counselor a message and they will
+        find one with you.
+      </p>
+    {% endif %}
   {% endfor %}
 {% endif %}
 {% endblock %}

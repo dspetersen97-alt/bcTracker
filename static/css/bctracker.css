@@ -597,6 +597,95 @@ button.quiet:hover,
 /* Actions belonging to one row of a table, kept off the content beside them. */
 .row-actions { white-space: nowrap; text-align: right; }
 
+/* --- the booking calendar --- */
+
+/* A month grid, as a table because that is what it is. Fixed layout so the seven
+   columns are equal whatever is in them — without it the week containing a day with
+   "12 times" on it comes out wider than the others and the grid stops reading as a
+   grid. */
+.calendar {
+  width: 100%;
+  max-width: 30rem;
+  margin: 1rem 0 0;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.calendar caption {
+  padding: 0 0 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 650;
+  text-align: left;
+}
+
+.calendar th {
+  padding: 0 0 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+
+/* The abbreviation is there for the title attribute, not for a dotted underline —
+   browsers draw one by default and seven of them across the top is noise. */
+.calendar th abbr { text-decoration: none; }
+
+.calendar td {
+  padding: 1px;
+  vertical-align: top;
+}
+
+/* Every cell is the same height whether it holds a link or a bare number, so the
+   rows do not jump about as availability changes down the month. */
+.cal-day {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-height: 3.4rem;
+  padding: 0.35rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+/* A day with times on it. Filled, bordered *and* labelled with the count: the fill
+   is the thing that catches the eye across a month, and the words are what make the
+   cell readable to somebody who cannot see the fill at all. */
+.cal-open {
+  background: var(--card);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.cal-open:hover { background: var(--paper); }
+
+.cal-date { font-variant-numeric: tabular-nums; }
+
+.cal-count {
+  font-size: 0.72rem;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+/* Days spilling in from the months either side. Dimmed rather than blanked, because
+   a row with holes in it reads as a row with no days in it. */
+.cal-outside .cal-day { opacity: 0.45; }
+
+/* Today, and the day whose times are listed below. Two different marks on purpose —
+   they are frequently the same cell and frequently not, and one style for both would
+   make the page look like it had lost track of which. */
+.cal-today .cal-day { box-shadow: inset 0 0 0 1px var(--line); }
+
+.cal-selected .cal-day {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
 /* Bookable times. One section per day, and the times inside wrap: a counselor
    with a full week produces a long list and a fixed grid would either scroll
    sideways on a phone or waste half a monitor. */

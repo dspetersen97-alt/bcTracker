@@ -280,10 +280,21 @@ def override_delete(request, public_id):
 def book(request, case_public_id):
     """A counselee picking one of the times their counselor is offering.
 
-    Two steps, both server-rendered: pick a time from the list, then confirm it
-    with an optional note. Two GETs rather than a grid of forms because there is no
-    JavaScript here at all, and a page carrying one form per slot would repeat the
-    note field forty times over.
+    Three steps, all server-rendered and all GETs until the last: pick a day out of
+    a month calendar, pick a time on that day, then confirm it with a note. Links
+    rather than a grid of forms because there is no JavaScript here at all, and a
+    page carrying one form per slot would repeat the note field forty times over.
+
+    A calendar rather than a fortnight's worth of headings and lists, which is what
+    this was: the question a counselee arrives with is "when *could* I come in", and
+    a list can only answer it by being scrolled. A month of cells answers it at a
+    glance, and the days worth clicking are the ones that say how many times are on
+    them — the highlight is the second signal, not the only one.
+
+    The page always arrives with a day already chosen, the soonest one on offer, so
+    that landing on it shows real times rather than an instruction to click
+    something. That also means the calendar never appears empty-handed on a
+    counselor's first day back after a fortnight away.
 
     The times are generated on every render, including the one after a failed
     confirmation, so a slot taken while the page sat open is simply not there the
@@ -305,9 +316,6 @@ def book(request, case_public_id):
 
     now = timezone.now()
     window = services.BookingWindow(case.counselor)
-    start_date = _parse_date(request.GET.get("from"), now.astimezone(window.zone).date())
-    end_date = _parse_date(request.GET.get("to"), start_date + timedelta(days=13))
-
     chosen = _parse_slot(request.GET.get("slot") or request.POST.get("slot"))
     form = None
 
@@ -339,15 +347,24 @@ def book(request, case_public_id):
                 )
                 return redirect("scheduling:detail", public_id=booking.public_id)
 
-    available = services.bookable_slots(
-        counselor=case.counselor,
-        counselee=booking_for,
-        now=now,
-        start_date=start_date,
-        end_date=end_date,
+    # The viewer's zone throughout, not the counselor's: a counselee in another
+    # state should see their own Tuesday, and a day in the grid has to be the same
+    # day as the times listed under it.
+    viewer_zone = request.user.zoneinfo
+    today = now.astimezone(viewer_zone).date()
+    available = slots.group_by_day(
+        services.bookable_slots(
+            counselor=case.counselor,
+            counselee=booking_for,
+            now=now,
+            start_date=today,
+            end_date=today + timedelta(days=min(window.horizon_days, CALENDAR_SPAN_DAYS)),
+        ),
+        viewer_zone,
     )
-    # Grouped in the *viewer's* zone: a counselee in another state should see
-    # their own Tuesday, not their counselor's.
+    by_day = dict(available)
+    month, selected = _calendar_position(request, by_day, today=today)
+
     return render(
         request,
         "scheduling/book.html",
@@ -356,17 +373,89 @@ def book(request, case_public_id):
             "form": form,
             "chosen": chosen,
             "may_book": booking_for is not None,
-            "days": slots.group_by_day(available, request.user.zoneinfo),
+            "calendar": slots.month_grid(month, available=by_day, today=today, selected=selected),
+            "weekdays": slots.weekday_headings(),
+            "month": month,
+            "previous_month": _month_step(month, -1, today=today),
+            "next_month": _month_step(month, 1, today=today),
+            "selected_day": selected,
+            # One entry, or none. The same shape the whole-fortnight listing used, so
+            # the template renders a day's times the way it always did.
+            "days": [(selected, by_day[selected])] if selected in by_day else [],
+            "any_times_at_all": bool(by_day),
             "window": window,
-            "start_date": start_date,
-            "end_date": end_date,
-            "previous_from": start_date - timedelta(days=14),
-            "next_from": end_date + timedelta(days=1),
             # Named so a counselee in another state can tell that 10am is their own
             # ten o'clock rather than their counselor's.
-            "viewer_zone": str(request.user.zoneinfo),
+            "viewer_zone": str(viewer_zone),
         },
     )
+
+
+#: How far ahead the calendar draws, whatever ``booking_horizon_days`` says. A
+#: horizon of a year would mean generating four thousand slots to shade thirty
+#: cells, and a calendar somebody has to page through twelve times is not one
+#: anybody uses. The horizon still decides what may be *booked* — a counselee who
+#: needs a date beyond this messages their counselor, which is what the empty
+#: state already tells them to do.
+CALENDAR_SPAN_DAYS = 92
+
+
+def _calendar_position(request, by_day, *, today):
+    """Which month to draw and which day's times to list. Never raises.
+
+    ``?day`` and ``?month`` both come from a link on the page, so both are also
+    things somebody can type. A day with nothing on it is treated as no day at all
+    rather than as an error — the commonest way to arrive at one is a bookmark of a
+    time that has since been taken, and a validation message about a query
+    parameter would be a strange answer to that.
+
+    The order matters. An explicit ``?month`` wins, so paging to a month with
+    nothing free shows that month rather than jumping back to one that has
+    something. Otherwise the month follows the chosen day, and the chosen day
+    follows what is actually on offer.
+    """
+    selected = _parse_date(request.GET.get("day"))
+    if selected not in by_day:
+        selected = None
+
+    month = _parse_month(request.GET.get("month"))
+    if month is None:
+        month = (selected or min(by_day, default=today)).replace(day=1)
+
+    if selected is None:
+        in_month = sorted(
+            day for day in by_day if (day.year, day.month) == (month.year, month.month)
+        )
+        selected = in_month[0] if in_month else None
+    return month, selected
+
+
+def _parse_month(raw):
+    """``YYYY-MM`` from a query string, as the first of that month, or None."""
+    if not raw:
+        return None
+    try:
+        year, month = raw.split("-")
+        return date(int(year), int(month), 1)
+    except (ValueError, TypeError):
+        return None
+
+
+def _month_step(month, delta, *, today):
+    """The month ``delta`` either side of ``month``, or None if it is out of range.
+
+    Returning None rather than a date is what lets the template render the arrow as
+    plain text at each end. The range is "not before this month" and "starts inside
+    the span the calendar draws", so a counselee cannot page back into last year or
+    forward past the point where every cell would be blank anyway.
+    """
+    year, index = divmod((month.year * 12 + month.month - 1) + delta, 12)
+    target = date(year, index + 1, 1)
+    if target < today.replace(day=1):
+        return None
+    if target > today + timedelta(days=CALENDAR_SPAN_DAYS):
+        return None
+    return target
 
 
 def _parse_slot(raw):

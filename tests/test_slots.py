@@ -406,3 +406,101 @@ def test_group_by_day_returns_days_in_order_with_their_slots():
 
 def test_no_rules_means_no_slots():
     assert generate(start=date(2026, 3, 3), end=date(2026, 4, 3)) == []
+
+
+# --- the month grid ------------------------------------------------------
+
+# Rendering arithmetic rather than time arithmetic, but the same reason for being
+# here: a month grid is where an off-by-one in February eventually lives, and it is
+# testable without a database or a request.
+
+
+def grid(month, *, available=(), today=None, selected=None):
+    """``month_grid`` with the fiddly arguments defaulted. ``available`` is dates."""
+    return slots.month_grid(
+        month,
+        available={day: [object()] for day in available},
+        today=today or date(2026, 3, 1),
+        selected=selected,
+    )
+
+
+def test_the_week_starts_on_sunday():
+    """A grid whose weeks start on the wrong day is misread, not noticed."""
+    assert [short for short, _full in slots.weekday_headings()][0] == "Sun"
+    assert [full for _short, full in slots.weekday_headings()][-1] == "Saturday"
+
+
+def test_every_row_is_a_full_week():
+    weeks = grid(date(2026, 3, 1))
+
+    assert all(len(week) == 7 for week in weeks)
+    assert all(week[0].date.weekday() == 6 for week in weeks)
+
+
+def test_the_whole_month_is_in_there_exactly_once():
+    days = [cell.date for week in grid(date(2026, 2, 14)) for cell in week if cell.in_month]
+
+    assert days == [date(2026, 2, day) for day in range(1, 29)]
+
+
+def test_a_month_beginning_on_its_first_column_needs_no_leading_cells():
+    """March 2026 starts on a Sunday, which is the case that reveals a fencepost."""
+    first = grid(date(2026, 3, 20))[0][0]
+
+    assert first.date == date(2026, 3, 1)
+    assert first.in_month
+
+
+def test_the_neighbouring_months_fill_the_ends_of_the_rows():
+    weeks = grid(date(2026, 4, 10))
+    first, last = weeks[0][0], weeks[-1][-1]
+
+    assert first.date == date(2026, 3, 29)
+    assert not first.in_month
+    assert last.date == date(2026, 5, 2)
+    assert not last.in_month
+
+
+def test_a_day_with_times_on_it_is_available_and_counted():
+    available = {date(2026, 3, 4): [object(), object(), object()]}
+
+    cells = {
+        cell.date: cell
+        for week in slots.month_grid(date(2026, 3, 1), available=available, today=date(2026, 3, 1))
+        for cell in week
+    }
+
+    assert cells[date(2026, 3, 4)].is_available
+    assert cells[date(2026, 3, 4)].slot_count == 3
+    assert not cells[date(2026, 3, 5)].is_available
+    assert cells[date(2026, 3, 5)].slot_count == 0
+
+
+def test_a_spilled_in_day_can_still_be_available():
+    """A counselee looking at the last row of March has no reason to be told that
+    the 1st of April is somewhere else."""
+    cells = [cell for week in grid(date(2026, 3, 1), available=[date(2026, 4, 1)]) for cell in week]
+    april_first = next(cell for cell in cells if cell.date == date(2026, 4, 1))
+
+    assert not april_first.in_month
+    assert april_first.is_available
+
+
+def test_today_and_the_chosen_day_are_marked_separately():
+    """They are often the same cell and often not, and one mark for both would make
+    the page look as though it had lost track of which."""
+    cells = {
+        cell.date: cell
+        for week in grid(date(2026, 3, 1), today=date(2026, 3, 5), selected=date(2026, 3, 12))
+        for cell in week
+    }
+
+    assert cells[date(2026, 3, 5)].is_today
+    assert not cells[date(2026, 3, 5)].is_selected
+    assert cells[date(2026, 3, 12)].is_selected
+    assert not cells[date(2026, 3, 12)].is_today
+
+
+def test_no_day_is_marked_when_none_was_chosen():
+    assert not any(cell.is_selected for week in grid(date(2026, 3, 1)) for cell in week)

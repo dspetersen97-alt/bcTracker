@@ -1,10 +1,12 @@
 """
 Turning office hours into bookable times.
 
-One pure function, ``generate``. It takes rows and returns times; it opens no
-database connection and reads no settings, which is what makes the awkward cases
-cheap to test — daylight saving, a closure that only covers part of a morning, an
-appointment already in the diary, the minimum-notice cutoff.
+One real function, ``generate``, and two that arrange its output for a page.
+Nothing here opens a database connection or reads a setting; they take rows and
+return times, which is what makes the awkward cases cheap to test — daylight
+saving, a closure that only covers part of a morning, an appointment already in
+the diary, the minimum-notice cutoff, a month whose first row starts in the month
+before it.
 
 The order of operations is deliberate and is the whole algorithm:
 
@@ -20,6 +22,7 @@ counselor's 9am is still 9am. Stepping in UTC instead would silently move every
 appointment by an hour twice a year.
 """
 
+import calendar
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -96,6 +99,79 @@ def group_by_day(slots, zone):
     for slot in slots:
         days.setdefault(slot.start.astimezone(zone).date(), []).append(slot)
     return sorted(days.items())
+
+
+#: Which column a week starts in. Sunday, as a printed calendar in the US does it.
+#: A grid whose weeks start on the wrong day is not noticed, it is misread: somebody
+#: counts along the row and clicks the cell beside the one they meant.
+FIRST_WEEKDAY = calendar.SUNDAY
+
+
+@dataclass(frozen=True)
+class CalendarDay:
+    """One cell of a month grid.
+
+    Carries ``slot_count`` rather than the slots themselves. The grid's job is to
+    say which days are worth clicking; the times for the day actually chosen are
+    listed separately, and putting a month of them in the grid would mean building
+    hundreds of objects to render thirty numbers.
+    """
+
+    date: object
+    in_month: bool
+    slot_count: int
+    is_today: bool
+    is_selected: bool
+
+    @property
+    def is_available(self) -> bool:
+        return self.slot_count > 0
+
+
+def month_grid(month, *, available, today, selected=None):
+    """One month as a list of weeks of ``CalendarDay``. Six rows at most, five often.
+
+    ``month`` is any date in the month to draw; ``available`` maps a date to the
+    slots on it — ``dict(group_by_day(...))``. ``selected`` is the day whose times
+    the page is showing, so the grid can mark where the list below it came from.
+
+    The leading and trailing cells from the neighbouring months are included rather
+    than left blank, because a row with holes in it reads as a row with no days in
+    it. They are flagged with ``in_month`` so they can be dimmed, and they are
+    offered as normal if they happen to have times on them: a counselee looking at
+    the last row of March has no reason to be told that the 1st of April is
+    somewhere else.
+
+    Weeks are built with ``calendar.Calendar`` rather than by arithmetic on the
+    first of the month, which is where an off-by-one in February eventually lives.
+    """
+    weeks = calendar.Calendar(firstweekday=FIRST_WEEKDAY).monthdatescalendar(
+        month.year, month.month
+    )
+    return [
+        [
+            CalendarDay(
+                date=day,
+                in_month=day.month == month.month and day.year == month.year,
+                slot_count=len(available.get(day, ())),
+                is_today=day == today,
+                is_selected=day == selected,
+            )
+            for day in week
+        ]
+        for week in weeks
+    ]
+
+
+def weekday_headings():
+    """The seven column headings, starting where ``FIRST_WEEKDAY`` says.
+
+    Full names as well as short ones: the short form is what fits a narrow column
+    and the full form is what a screen reader should say, so the template needs
+    both and neither should be spelled out twice in markup.
+    """
+    columns = [(FIRST_WEEKDAY + offset) % 7 for offset in range(7)]
+    return [(calendar.day_abbr[weekday], calendar.day_name[weekday]) for weekday in columns]
 
 
 # --- internals ------------------------------------------------------------
