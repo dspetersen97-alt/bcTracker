@@ -848,6 +848,116 @@ button.quiet:hover,
 
 /* --- messages --- */
 
+/* Two shapes for two jobs — the split itself is made in
+   apps/core/templatetags/message_tags.py.
+
+   A confirmation is a toast: it comes in at the top right, sits over the page and
+   fades out after a few seconds, because "Case updated." is worth a glance and the
+   page underneath already shows the update. Nobody should have to dismiss it, and
+   nothing is lost if it is never read.
+
+   It can still be dismissed, hovered to hold, and it respects a request for less
+   motion. What it must never carry is something to act on: a message that removes
+   itself after seven seconds is one somebody will miss, so warnings and errors keep
+   the in-flow banner further down this section. */
+.toasts {
+  position: fixed;
+  /* Clear of the header rather than under it, so a confirmation does not cover the
+     menu control the reader might be about to use. */
+  top: 4.25rem;
+  right: 0.9rem;
+  /* Above the header, which is pinned; the skip link stays above everything. */
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: min(24rem, calc(100vw - 1.8rem));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  /* A faded toast still holds its place in the stack, and an invisible box must not
+     swallow a click meant for the page. Put back on the toasts themselves. */
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.6rem 0.7rem;
+  background: var(--card);
+  border: 1px solid var(--line);
+  /* The stripe is a second signal for the same thing the wording already says.
+     Colour on its own would be the only difference between "saved" and "not
+     connected", and for a lot of readers that is no difference at all. */
+  border-left: 4px solid var(--ok);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 18px rgb(28 32 36 / 18%);
+  font-size: 0.92rem;
+  pointer-events: auto;
+  animation:
+    toast-in 180ms ease-out,
+    toast-out 600ms ease-in 7s forwards;
+}
+
+.toast-info { border-left-color: var(--accent); }
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(1.5rem);
+  }
+}
+
+/* Ends at visibility:hidden rather than at opacity alone: hidden also takes the
+   dismiss checkbox out of the tab order, so a toast that has faded is not an
+   invisible stop for someone tabbing through the page. */
+@keyframes toast-out {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+/* Reading it takes as long as it takes. Hovering the stack or focusing a dismiss
+   button holds every toast in it where it is. */
+.toasts:hover .toast,
+.toasts:focus-within .toast {
+  animation-play-state: paused;
+}
+
+/* Dismissal, with no id, no form and no script: the checkbox is inside the toast,
+   so :has() lets the toast hide itself. Where :has() is missing the toast is not
+   dismissible and fades on its own, which is untidy rather than broken. */
+.toast:has(input:checked) { display: none; }
+
+.toast-dismiss {
+  margin-left: auto;
+  padding: 0 0.2rem;
+  border-radius: var(--radius);
+  color: var(--ink-soft);
+  font-size: 1.1rem;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.toast-dismiss:hover { color: var(--ink); }
+
+/* The focus is on the hidden input, so the ring is drawn on the label around it. */
+.toast-dismiss:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Someone who has asked for less movement gets none: the toast is simply there,
+   and it still fades, because a fade is not the thing that causes trouble and
+   leaving it out would mean the toast never left. */
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: toast-out 600ms ease-in 7s forwards;
+  }
+}
+
 .messages {
   max-width: 44rem;
   margin: 1rem auto 0;
@@ -855,6 +965,8 @@ button.quiet:hover,
   list-style: none;
 }
 
+/* The banner form, kept for everything a reader may have to act on. In the flow of
+   the page, above the content, and it stays until the page is left. */
 .message {
   padding: 0.6rem 0.8rem;
   border-radius: var(--radius);
@@ -863,7 +975,8 @@ button.quiet:hover,
   font-size: 0.92rem;
 }
 
-.message-success { border-color: var(--ok); }
+/* No .message-success: a confirmation is a toast now, so the only levels that reach
+   a banner are these two. */
 .message-error { border-color: var(--danger); }
 /* Neither a failure nor a plain confirmation: the action worked and something about
    it needs reading. A series that skipped two weeks is the case this exists for. */

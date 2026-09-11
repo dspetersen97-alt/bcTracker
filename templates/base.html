@@ -1,4 +1,4 @@
-{% load static %}<!doctype html>
+{% load static message_tags %}<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -67,13 +67,46 @@
     {% endif %}
 
     <div class="content">
-      {% if messages %}
-        <ul class="messages" role="status">
-          {% for message in messages %}
-            <li class="message message-{{ message.tags }}">{{ message }}</li>
-          {% endfor %}
-        </ul>
-      {% endif %}
+      {% comment %} A message has two possible homes, and which one it gets depends on
+         whether it is allowed to disappear. A confirmation goes to the toast stack in
+         the top right corner and fades out by itself, because the page behind it
+         already shows what happened. A warning or an error stays here in the flow of
+         the page, where it cannot time out from under somebody who has to act on it.
+         The rule is in apps/core/templatetags/message_tags.py so that the two
+         containers below cannot drift into disagreeing about it.
+
+         Iterating the storage twice is safe: iterating marks it used and leaves the
+         loaded list alone, so both filters see everything and the queue is cleared
+         once, after the response. {% endcomment %}
+      {% with toast_messages=messages|toasts banner_messages=messages|banners %}
+        {% if toast_messages %}
+          <ul class="toasts" role="status">
+            {% for message in toast_messages %}
+              <li class="toast toast-{{ message.tags }}">
+                <span>{{ message }}</span>
+                {% comment %} The checkbox lives inside the toast so that ``:has()`` can
+                   hide its own ancestor — there is nothing to remember and nothing to
+                   post, so no id, no form and no script. Visually hidden but focusable,
+                   which is also what pauses the fade for a keyboard user; a browser
+                   without ``:has()`` just waits the fade out instead. {% endcomment %}
+                <label class="toast-dismiss">
+                  <input type="checkbox" class="visually-hidden">
+                  <span aria-hidden="true">&times;</span>
+                  <span class="visually-hidden">Dismiss this message</span>
+                </label>
+              </li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+
+        {% if banner_messages %}
+          <ul class="messages" role="status">
+            {% for message in banner_messages %}
+              <li class="message message-{{ message.tags }}">{{ message }}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      {% endwith %}
 
       {% comment %} main is held to a reading measure by default, because most pages here are
          prose and a form. A page whose content is a table wide enough to need the room
