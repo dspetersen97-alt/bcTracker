@@ -28,12 +28,16 @@ local_settings.py
 /media/
 /backups/
 
-# Written by scripts/bootstrap.sh, and each describes one host rather than the
-# application: which encrypted dataset the volumes live on, and whether TLS comes
-# from Let's Encrypt or Caddy's internal CA. Committing either would put one
-# ministry's layout in everybody's checkout, and would make an upgrade a merge
+# Written by scripts/bootstrap.sh, and describes one host rather than the
+# application: which encrypted dataset the volumes live on. Committing it would put
+# one ministry's layout in everybody's checkout, and would make an upgrade a merge
 # conflict against a local edit.
 /docker-compose.override.yml
+
+# No longer generated: a LAN install sets CADDY_TLS in .env instead, because a copy
+# of the Caddyfile mounted over the tracked one stopped receiving the security
+# header changes made after it was written. Still ignored so that upgrading an
+# install that has one left over does not present it as something to commit.
 /compose/caddy/Caddyfile.local
 
 # Tooling

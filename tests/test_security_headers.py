@@ -178,6 +178,49 @@ class TestTheTwoCopiesAgree:
         assert caddy_header("X-Frame-Options") == settings.X_FRAME_OPTIONS
 
 
+class TestTheCaddyfileReadAboveIsTheOneServed:
+    """Two copies is the trade. Three is how a deployment stops being covered.
+
+    A LAN install used to be given a *generated* copy of the Caddyfile with
+    ``tls internal`` added, mounted over the tracked one and untracked because it
+    names a single host. It was written once, at install. Every header changed
+    afterwards — including the frame policy that lets a counselor read a PDF on the
+    document's own page — was tested against the tracked file and served from the
+    frozen copy, which answered ``frame-src 'none'`` for months, and the only symptom
+    was a browser saying "This content is blocked".
+
+    So the tests above are worth what they say only while the file they parse is the
+    file the proxy loads. These two are about that, and neither is about a header.
+    """
+
+    #: The compose files in this repository. An operator's own override is not read:
+    #: this asserts what the project ships, and a host that mounts something else has
+    #: opted out of every assertion in this module — which is what the comment in
+    #: .gitignore and the upgrade note in docs/deployment.md are for.
+    COMPOSE_FILES = ("docker-compose.yml", "docker-compose.dev.yml")
+
+    def test_nothing_in_the_project_mounts_a_different_file_over_it(self):
+        for name in self.COMPOSE_FILES:
+            text = (Path(settings.BASE_DIR) / name).read_text()
+            for source in re.findall(r"-\s+(\S+):/etc/caddy/Caddyfile", text):
+                assert source == f"./{CADDYFILE.relative_to(settings.BASE_DIR).as_posix()}", (
+                    f"{name} mounts {source} as the Caddyfile, so the policy asserted "
+                    "here is not the policy served"
+                )
+
+    def test_no_script_writes_a_copy_of_it(self):
+        """The generated copy is gone; this is what keeps it gone. A copy is not
+        wrong because copying is untidy — it is wrong because the copy is untracked,
+        so nothing in this suite can read it and drift in it is invisible."""
+        for script in sorted((Path(settings.BASE_DIR) / "scripts").glob("*.sh")):
+            body = script.read_text()
+
+            assert "Caddyfile.local" not in body, f"{script.name} generates a second Caddyfile"
+            assert not re.search(r">\s*\S*compose/caddy/", body), (
+                f"{script.name} writes into the proxy configuration this suite reads"
+            )
+
+
 class TestTheTemplatesCanLiveUnderIt:
     """A policy nothing was written against is one somebody eventually relaxes."""
 

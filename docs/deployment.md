@@ -204,10 +204,16 @@ requires the hostname in `SITE_HOSTNAME` to resolve to this host and ports 80 an
 443 to reach it. Confirm the record has propagated before step 6 — Caddy will
 retry, but a failing ACME loop in the logs is a confusing first impression.
 
-**LAN-only install.** Edit `compose/caddy/Caddyfile`: use the internal hostname
-as the site address and add `tls internal`, which issues from Caddy's own CA.
-Browsers will warn until that CA is trusted on each device. `SITE_BASE_URL` and
-`DJANGO_ALLOWED_HOSTS` must match whatever name you chose.
+**LAN-only install.** Set `CADDY_TLS=tls internal` in `.env`, which issues from
+Caddy's own CA instead of asking Let's Encrypt for a certificate it cannot get.
+Browsers will warn until that CA is trusted on each device. `SITE_HOSTNAME`,
+`SITE_BASE_URL` and `DJANGO_ALLOWED_HOSTS` must all match whatever name you chose.
+
+Deliberately one variable and not an edited copy of `compose/caddy/Caddyfile`. The
+Caddyfile is where the security headers a browser actually sees are set, because
+Caddy's `header` directive replaces Django's; a copy of it mounted over the tracked
+one is a copy that stops receiving changes to those headers, silently, the day
+after it is made.
 
 ---
 
@@ -552,6 +558,22 @@ docker compose logs -f web               # migrations, then the deploy checks
 Read that log. The entrypoint applies migrations and then runs
 `check --deploy --fail-level WARNING`, so a new required setting shows up as a
 container that will not start rather than as a broken page.
+
+**Once, if this install was bootstrapped with `--internal-tls` before v0.4.1.**
+Earlier versions mounted a generated copy of the Caddyfile, `Caddyfile.local`, over
+the tracked one. That copy froze at the moment it was written, so header changes
+shipped since then — including the frame policy that lets a PDF be read on the
+document's own page — never reached the browser. Move it to a variable and delete
+it:
+
+```bash
+grep -q '^CADDY_TLS=' .env || echo 'CADDY_TLS=tls internal' >> .env
+rm compose/caddy/Caddyfile.local
+# and remove the `caddy:` stanza from docker-compose.override.yml, or the whole
+# file if that stanza is all it contains
+docker compose up -d
+curl -skI https://$SITE_HOSTNAME/login/ | grep -i x-frame-options   # SAMEORIGIN
+```
 
 **Rolling back.** If the new version applied migrations, the previous image will
 not run against the new schema. So: `git checkout` the previous commit, rebuild,

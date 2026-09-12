@@ -2,10 +2,22 @@
 # renewed automatically via Let's Encrypt, which requires this host to be
 # reachable from the internet on ports 80 and 443.
 #
-# For a LAN-only deployment, replace the site address with the internal hostname
-# and add `tls internal` to use Caddy's local CA instead.
+# For a LAN-only deployment, set SITE_HOSTNAME to the internal hostname and
+# CADDY_TLS to `tls internal` in .env — see the placeholder below.
 
 {$SITE_HOSTNAME} {
+	# Empty on an internet-facing install, `tls internal` on a LAN one, where
+	# Let's Encrypt cannot reach the host and its own CA is the only option.
+	#
+	# A placeholder rather than a second copy of this file with the line added.
+	# The copy is how a LAN deployment came to be serving `frame-src 'none'`
+	# months after that stopped being the policy: it was generated once at
+	# install, was never regenerated, and — being untracked, since it names one
+	# host — nothing here could notice it had frozen. Every security header
+	# below is worth exactly as much as the deployment's ability to receive a
+	# change to it, so the host's one choice is a variable and this file is the
+	# only file the container reads.
+	{$CADDY_TLS}
 	encode zstd gzip
 
 	# Security headers. Django sets several of these too; having them here means

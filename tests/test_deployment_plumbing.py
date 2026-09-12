@@ -203,6 +203,35 @@ class TestTheGateTheEntrypointRunsBeforeServing:
             )
 
 
+class TestTheProxyIsGivenEveryVariableItReads:
+    """A ``{$VAR}`` nobody passes is not an error in a Caddyfile — it is a blank line.
+
+    Caddy substitutes an unset variable with nothing and then parses what is left, so
+    a placeholder Compose does not supply silently deletes the directive it was
+    standing in. That is survivable for a header and not for these: an empty
+    ``CADDY_TLS`` is a LAN install asking Let's Encrypt for a certificate it can never
+    be given, and an empty ``SITE_HOSTNAME`` is a site block with no address.
+    """
+
+    def test_every_placeholder_is_passed_to_the_container(self):
+        caddy = compose_services()["caddy"]
+
+        for name in sorted(set(re.findall(r"\{\$([A-Z_][A-Z0-9_]*)", CADDYFILE.read_text()))):
+            assert re.search(rf"(?m)^\s+{name}:", caddy), (
+                f"the Caddyfile reads {name} and the caddy service never passes it, "
+                "so it resolves to nothing"
+            )
+
+    def test_how_tls_is_issued_is_one_of_them(self):
+        """Named rather than left to the loop above, because this is the placeholder
+        that replaced a generated copy of this file — see tests/test_security_headers.py
+        for what the copy cost — and a loop over whatever happens to be in the file
+        would pass just as happily once somebody deleted it."""
+        assert re.search(r"(?m)^\t\{\$CADDY_TLS\}$", CADDYFILE.read_text()), (
+            "compose/caddy/Caddyfile no longer lets a host choose how TLS is issued"
+        )
+
+
 @pytest.mark.skipif(SHELL is None, reason="needs a POSIX shell to run the cron env script")
 class TestTheCronSidecarInheritsTheConfiguration:
     """cron gives its jobs a near-empty environment.
@@ -484,21 +513,46 @@ class TestTheBootstrapScript:
 
         assert "the-only-copy" not in (root / ".env").read_text()
 
-    def test_a_lan_install_keeps_the_headers_the_ministry_ships(self, tmp_path):
-        """`tls internal` is added to a copy, so the tracked Caddyfile stays the
-        record of what is served — and an upgrade does not collide with an edit."""
+    def test_a_lan_install_says_so_in_one_variable(self, tmp_path):
+        """How TLS is issued is the whole of a LAN install's difference to the proxy,
+        so it is a value in .env.
+
+        It used to be a generated copy of the Caddyfile with ``tls internal`` added,
+        mounted over the tracked one. That copy was written once and never again, so
+        it went on serving the headers of the day it was made — which is how a
+        deployment came to refuse to frame its own document preview long after the
+        policy said it could. The copy must not come back.
+        """
         root = self.checkout(tmp_path)
 
         self.run_in(root, "--internal-tls", "--no-start")
 
-        generated = (root / "compose" / "caddy" / "Caddyfile.local").read_text()
-        assert "tls internal" in generated
-        csp = re.search(r'Content-Security-Policy "([^"]+)"', CADDYFILE.read_text())
-        assert csp and csp[1] in generated
-        assert (
-            "Caddyfile.local:/etc/caddy/Caddyfile"
-            in (root / "docker-compose.override.yml").read_text()
-        )
+        assert "CADDY_TLS=tls internal" in (root / ".env").read_text()
+        assert not (root / "compose" / "caddy" / "Caddyfile.local").exists()
+
+    def test_and_needs_no_file_describing_this_host(self, tmp_path):
+        """The other half: with the mount gone, a LAN install has nothing to
+        override, and an override is a file an upgrade cannot reason about."""
+        root = self.checkout(tmp_path)
+
+        self.run_in(root, "--internal-tls", "--no-start")
+
+        assert not (root / "docker-compose.override.yml").exists()
+
+    def test_an_internet_facing_install_leaves_it_empty(self, tmp_path):
+        """Written out as an empty value rather than left absent, so that the
+        setting an operator has to change for a LAN install is in front of them with
+        its comment, and so Caddy asks Let's Encrypt for a real certificate."""
+        root = self.checkout(tmp_path)
+
+        self.run_in(root, "--host", "bc.example.org", "--no-start")
+
+        written = (root / ".env").read_text()
+
+        assert re.search(r"(?m)^CADDY_TLS=$", written)
+        # Only the line, not the file: the comment carried over from .env.example is
+        # where `tls internal` is explained, and it belongs in front of the operator.
+        assert not re.search(r"(?m)^CADDY_TLS=tls internal$", written)
 
     def test_the_two_services_that_hold_documents_are_given_the_same_directory(self, tmp_path):
         """The nightly purge deletes the files whose rows it removes. Pointed at a

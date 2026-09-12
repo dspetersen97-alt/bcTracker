@@ -20,6 +20,10 @@ services:
     environment:
       # Used by the Caddyfile to request a certificate for the real hostname.
       SITE_HOSTNAME: ${SITE_HOSTNAME:?set SITE_HOSTNAME in .env}
+      # `tls internal` for a LAN install, empty for an internet-facing one. Passed
+      # even when empty so the Caddyfile's placeholder resolves to nothing rather
+      # than to whatever the caddy image's environment happens to hold.
+      CADDY_TLS: ${CADDY_TLS:-}
       # Same variable the app reads for SECURE_HSTS_SECONDS. Caddy's header
       # directive replaces Django's, so both must agree or the documented
       # setting would be silently ineffective.
