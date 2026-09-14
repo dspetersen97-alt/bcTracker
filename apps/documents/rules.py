@@ -102,3 +102,30 @@ rules.add_perm(
     "documents.delete_document",
     is_admin | is_counselor_on_the_documents_case | is_document_owner,
 )
+
+
+# --- the template library -------------------------------------------------
+#
+# Three permissions rather than one, because the library has three quite different
+# audiences: everybody who counsels reads it, only administrators change it, and
+# using one on a case is a decision about that case.
+
+# Browsing and downloading the library. No object: it is one shelf for the whole
+# ministry, so there is nothing to check a template against. The two roles that are
+# absent are the point — a counselee is not given the ministry's blank paperwork to
+# read, and billing is not given the counseling material at all. Both therefore get a
+# 403 on the library rather than an empty page, which would be a claim about what is
+# on the shelf.
+rules.add_perm("documents.view_document_templates", is_admin | is_counselor)
+
+# Uploading, relabelling and withdrawing a template. Administrators only, which is
+# the whole of the ministry's answer to "who decides which intake form is current".
+# A counselor who could replace it would be changing what every other counselor
+# hands out.
+rules.add_perm("documents.manage_document_templates", is_admin)
+
+# Copying a template onto a case. Checked against the *Case*, and deliberately
+# narrower than ``documents.add_document``: a counselee may upload to their own case
+# and may not reach the library, so folding the two together would be the one way a
+# counselee could pull a ministry template into view.
+rules.add_perm("documents.use_document_template", is_admin | is_case_counselor)

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Use {{ template.display_name }} — {{ case.label }} — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>Put a template on this case</h1>
+  <p class="role"><a href="{% url 'documents:case_documents' case.public_id %}">{{ case.label }}</a></p>
+
+  <dl class="detail-list">
+    <dt>Template</dt><dd>{{ template.name }}</dd>
+    <dt>Kind</dt><dd>{{ template.get_kind_display }}</dd>
+    <dt>File</dt><dd>{{ template.original_filename }} ({{ template.byte_size|filesizeformat }})</dd>
+  </dl>
+
+  {% if template.description %}<p>{{ template.description|linebreaksbr }}</p>{% endif %}
+
+  <form method="post">
+    {% csrf_token %}
+    {% include "includes/form.html" %}
+    <button type="submit">Add to the case</button>
+    <a href="{% url 'documents:template_library' %}?case={{ case.public_id }}">Cancel</a>
+  </form>
+
+  {% comment %} Said out loud because it is what somebody expects to be untrue: this makes a
+     copy. It becomes an ordinary document on this case, with its own record of who
+     added it, and later changes to the library leave it alone. {% endcomment %}
+  <p class="muted">This copies the file onto the case. It is a document like any other
+    from then on — it can be renamed, shared, or withdrawn, and it does not change if
+    the template in the library is replaced.</p>
+</div>
+{% endblock %}

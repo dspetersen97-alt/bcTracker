@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ template.display_name }} — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>Edit template</h1>
+  <p class="role">{{ template.original_filename }}</p>
+  {% comment %} The name, the description and the kind. The file is not replaceable: a new
+     version of a form is a new template, and the old one is withdrawn — otherwise the
+     copies already on cases would be described by a row that no longer matches
+     them. {% endcomment %}
+  <form method="post">
+    {% csrf_token %}
+    {% include "includes/form.html" %}
+    <button type="submit">Save</button>
+    <a href="{% url 'documents:template_library' %}">Cancel</a>
+  </form>
+
+  <p class="muted">To replace the file itself, add the new version as its own template
+    and withdraw this one. Copies already on a case never change.</p>
+</div>
+{% endblock %}

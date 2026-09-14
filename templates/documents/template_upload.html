@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Add a template — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>Add a template</h1>
+  <p class="role"><a href="{% url 'documents:template_library' %}">Document templates</a></p>
+
+  {% comment %} Said plainly, because the library is the one upload page in this application
+     where what is uploaded is not about anybody: it goes on a shelf every counselor
+     reads. A form with a counselee's details already on it belongs on their case. {% endcomment %}
+  <p class="notice">Everyone who counsels can see and download this. Upload blank
+    forms and handouts only — never a document with somebody's answers on it.</p>
+
+  {# enctype matters: without it the browser posts filenames, not files. #}
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {% include "includes/form.html" %}
+    <button type="submit">Add to the library</button>
+  </form>
+
+  <p class="muted">Templates are scanned and stored encrypted, exactly like a case
+    document. Word files are converted to PDF, so upload a PDF if how it looks matters.</p>
+</div>
+{% endblock %}

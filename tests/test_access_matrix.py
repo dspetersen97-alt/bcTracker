@@ -502,6 +502,101 @@ MATRIX = {
             "financial_admin": 404,
         },
     ),
+    # --- the template library ----------------------------------------------
+    #
+    # Two patterns to read across these rows, and they are the whole design:
+    #
+    #   * A counselee and a financial_admin get **404** everywhere the route names a
+    #     template, and 403 on the two that name none. The library is not theirs to
+    #     see at all — ``DocumentTemplate.objects.for_actor`` returns none() for both
+    #     — so a template does not exist as far as they are concerned, and the routes
+    #     that take no id refuse the question rather than showing an empty shelf.
+    #   * A **counselor reads and uses; an administrator changes.** The counselor's
+    #     403 on upload, edit and withdraw is the point of the split: replacing the
+    #     intake form changes what every other counselor hands out.
+    "documents:template_library": (
+        {},
+        "get",
+        {
+            "anonymous": 302,
+            "counselee": 403,
+            "counselor": 200,
+            "admin": 200,
+            "financial_admin": 403,
+        },
+    ),
+    "documents:template_upload": (
+        {},
+        "get",
+        {
+            "anonymous": 302,
+            "counselee": 403,
+            "counselor": 403,
+            "admin": 200,
+            "financial_admin": 403,
+        },
+    ),
+    "documents:template_download": (
+        lambda s: {"public_id": s.template.public_id},
+        "get",
+        # A real decryption of a blob the scenario wrote, as documents:download is.
+        {
+            "anonymous": 302,
+            "counselee": 404,
+            "counselor": 200,
+            "admin": 200,
+            "financial_admin": 404,
+        },
+    ),
+    "documents:template_thumbnail": (
+        lambda s: {"public_id": s.template.public_id},
+        "get",
+        {
+            "anonymous": 302,
+            "counselee": 404,
+            "counselor": 200,
+            "admin": 200,
+            "financial_admin": 404,
+        },
+    ),
+    "documents:template_edit": (
+        lambda s: {"public_id": s.template.public_id},
+        "get",
+        {
+            "anonymous": 302,
+            "counselee": 404,
+            "counselor": 403,
+            "admin": 200,
+            "financial_admin": 404,
+        },
+    ),
+    "documents:template_withdraw": (
+        lambda s: {"public_id": s.template.public_id},
+        "post",
+        {
+            "anonymous": 302,
+            "counselee": 404,
+            "counselor": 403,
+            "admin": 302,
+            "financial_admin": 404,
+        },
+    ),
+    "documents:template_use": (
+        lambda s: {"case_public_id": s.case.public_id, "public_id": s.template.public_id},
+        "get",
+        # 403 rather than 404 for the two refused roles, unlike every other template
+        # row: this route names a case they can legitimately see, and the view resolves
+        # and refuses the *case* before it looks the template up. The counselee's 403
+        # is the one worth pausing on — they may upload to this case, and may still not
+        # pull a ministry template onto it.
+        {
+            "anonymous": 302,
+            "counselee": 403,
+            "counselor": 200,
+            "admin": 200,
+            "financial_admin": 403,
+        },
+    ),
     # --- messaging ---------------------------------------------------------
     #
     # The pattern to read across these rows: financial_admin never reaches

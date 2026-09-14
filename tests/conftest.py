@@ -188,7 +188,7 @@ def scenario(db, make_user):
     from apps.billing import services as billing
     from apps.billing.models import Fee, FeeKind, PaymentMethod
     from apps.counseling.models import Case, CaseMember, CounseleeProfile
-    from apps.documents.services import store_document
+    from apps.documents.services import store_document, store_template
     from apps.messaging.services import close_thread, start_thread
     from apps.scheduling.models import (
         AvailabilityOverride,
@@ -210,6 +210,16 @@ def scenario(db, make_user):
             owner=counselee,
             upload=SimpleUploadedFile("worksheet.jpg", jpeg_bytes()),
             title="Week one worksheet",
+        )
+        # One template on the ministry's shelf, stored through the real service so
+        # the download and thumbnail rows of the matrix assert a genuine 200 rather
+        # than a 404 from a blob nobody wrote. Uploaded by an administrator because
+        # that is the only role that may put one there — and a photo, for the same
+        # reason the document above is one: it is the only way it has a thumbnail.
+        template = store_template(
+            uploaded_by=actor if role == Role.ADMIN else make_user(Role.ADMIN),
+            upload=SimpleUploadedFile("intake-form.jpg", jpeg_bytes()),
+            name="Intake form",
         )
 
         rule = AvailabilityRule.objects.create(
@@ -310,6 +320,7 @@ def scenario(db, make_user):
             counselee=counselee,
             profile=profile,
             document=document,
+            template=template,
             rule=rule,
             override=override,
             booking=booking,

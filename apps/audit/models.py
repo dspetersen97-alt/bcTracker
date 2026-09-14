@@ -78,6 +78,19 @@ class AuditVerb(models.TextChoices):
     DOCUMENT_SHARED = "document.shared", "Document shared with the case"
     DOCUMENT_UNSHARED = "document.unshared", "Document returned to private"
 
+    # The template library. None of these rows is about a counselee — a template is
+    # ministry material, the same intake form for everybody — so they are recorded
+    # for a different reason than a document's are: the library is a set of files
+    # every counselor hands to the people they see, and "who put this in front of
+    # them, and when did it change" is the question. TEMPLATE_USED is the one that
+    # earns its place: it is the join between a template and the case document it
+    # became, which is otherwise unreconstructable once the copy has been renamed.
+    DOCUMENT_TEMPLATE_ADDED = "document_template.added", "Template added to the library"
+    DOCUMENT_TEMPLATE_UPDATED = "document_template.updated", "Template details updated"
+    DOCUMENT_TEMPLATE_WITHDRAWN = "document_template.withdrawn", "Template withdrawn"
+    DOCUMENT_TEMPLATE_DOWNLOADED = "document_template.downloaded", "Template downloaded"
+    DOCUMENT_TEMPLATE_USED = "document_template.used", "Template copied onto a case"
+
     # Messaging. A message body is never recorded here — the metadata carries a
     # character count and nothing else. The trail's job is who corresponded with
     # whom and when; putting the words in a second table would create a copy of

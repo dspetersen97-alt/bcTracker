@@ -6,9 +6,17 @@
 <h1>Documents</h1>
 <p class="role"><a href="{% url 'counseling:case_detail' case.public_id %}">{{ case.label }}</a></p>
 
-{% if can_upload %}
+{% if can_upload or can_use_templates %}
   <div class="actions">
-    <a class="button" href="{% url 'documents:upload' case.public_id %}">Upload a document</a>
+    {% if can_upload %}
+      <a class="button" href="{% url 'documents:upload' case.public_id %}">Upload a document</a>
+    {% endif %}
+    {% comment %} Staff only, and it is the entry point to the library the ministry's forms
+       live on — the case travels on the query string so the shelf can offer "use this
+       one here" without a second page. A counselee never sees this. {% endcomment %}
+    {% if can_use_templates %}
+      <a class="button quiet" href="{% url 'documents:template_library' %}?case={{ case.public_id }}">Use a template</a>
+    {% endif %}
   </div>
 {% endif %}
 

@@ -34,8 +34,14 @@ from apps.core.ids import looks_like_public_id
 from apps.counseling.models import Case
 from apps.documents import services
 from apps.documents.crypto import DecryptionError
-from apps.documents.forms import DocumentEditForm, DocumentUploadForm
-from apps.documents.models import Document, Visibility
+from apps.documents.forms import (
+    DocumentEditForm,
+    DocumentTemplateEditForm,
+    DocumentTemplateUploadForm,
+    DocumentUploadForm,
+    UseTemplateForm,
+)
+from apps.documents.models import Document, DocumentTemplate, Visibility
 from apps.scheduling.models import Booking
 
 logger = logging.getLogger(__name__)
@@ -103,6 +109,10 @@ def case_documents(request, case_public_id):
             "documents": documents,
             "can_upload": request.user.has_perm("documents.add_document", case),
             "can_share": request.user.has_perm("counseling.change_case", case),
+            # The way in to the library, from the page a counselor is on when they
+            # want the intake form. A counselee's page never shows it — see
+            # documents.use_document_template.
+            "can_use_templates": request.user.has_perm("documents.use_document_template", case),
         },
     )
 
@@ -408,3 +418,229 @@ def delete(request, public_id):
     services.soft_delete_document(document, actor=request.user, request=request)
     messages.success(request, _("Withdrawn. Your counselor has a record that it existed."))
     return redirect("documents:case_documents", case_public_id=case_public_id)
+
+
+# --- the template library -------------------------------------------------
+
+
+def visible_template_or_404(request, public_id):
+    """The single door onto a DocumentTemplate.
+
+    ``for_actor`` again, which for this model means "staff who counsel, and nobody
+    else": a counselee or a financial administrator gets a 404 on every one of these
+    routes rather than a refusal, because for them the library does not exist. See
+    ``DocumentTemplateQuerySet``.
+    """
+    return get_object_or_404(
+        DocumentTemplate.objects.for_actor(request.user).select_related("uploaded_by"),
+        public_id=public_id,
+    )
+
+
+def case_the_library_was_opened_from(request):
+    """The case a counselor came to the library *for*, or ``None``.
+
+    Carried on the query string so that the same library page can serve both errands
+    — browsing the shelf, and fetching something for a case — without a second view
+    or a duplicated search box. The id is resolved through ``Case.objects.for_actor``
+    and then permission-checked, so all the ``?case=`` in a copied URL can do is
+    offer buttons the actor was already entitled to.
+
+    A malformed id is ignored rather than refused: the library is a page worth
+    landing on either way, and a 404 for a stale link would hide the shelf as well as
+    the buttons.
+    """
+    raw = request.GET.get("case", "")
+    if not looks_like_public_id(raw):
+        return None
+    case = Case.objects.for_actor(request.user).filter(public_id=raw).first()
+    if case is None or not request.user.has_perm("documents.use_document_template", case):
+        return None
+    return case
+
+
+@login_required
+def template_library(request):
+    """The shelf: every template, searchable, with the whole ministry's copy of each.
+
+    The search is a plain GET form and a single ``icontains`` pass — see
+    ``DocumentTemplateQuerySet.matching``. No ranking, no stemming: there are tens of
+    these, not thousands, and a counselor who types "intake" wants every row with
+    the word in it.
+    """
+    require_perm(request, "documents.view_document_templates")
+
+    term = request.GET.get("q", "")
+    templates = DocumentTemplate.objects.for_actor(request.user).matching(term)
+    case = case_the_library_was_opened_from(request)
+
+    return render(
+        request,
+        "documents/template_library.html",
+        {
+            "templates": templates,
+            "q": term,
+            "case": case,
+            "can_manage": request.user.has_perm("documents.manage_document_templates"),
+        },
+    )
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def template_upload(request):
+    require_perm(request, "documents.manage_document_templates")
+
+    form = DocumentTemplateUploadForm(request.POST or None, request.FILES or None)
+    if request.method == "POST" and form.is_valid():
+        try:
+            template = services.store_template(
+                uploaded_by=request.user,
+                upload=form.cleaned_data["file"],
+                name=form.cleaned_data["name"],
+                description=form.cleaned_data["description"],
+                kind=form.cleaned_data["kind"],
+                request=request,
+            )
+        except services.UploadRejected as exc:
+            form.add_error("file", str(exc))
+        else:
+            messages.success(
+                request,
+                _("“%(name)s” is in the library. Every counselor can use it now.")
+                % {"name": template.name},
+            )
+            return redirect("documents:template_library")
+
+    return render(request, "documents/template_upload.html", {"form": form})
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def template_edit(request, public_id):
+    template = visible_template_or_404(request, public_id)
+    require_perm(request, "documents.manage_document_templates", template)
+
+    form = DocumentTemplateEditForm(request.POST or None, instance=template)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        record(
+            AuditVerb.DOCUMENT_TEMPLATE_UPDATED,
+            actor=request.user,
+            target=template,
+            request=request,
+            fields=sorted(form.changed_data),
+        )
+        messages.success(request, _("Saved."))
+        return redirect("documents:template_library")
+
+    return render(request, "documents/template_edit.html", {"form": form, "template": template})
+
+
+@login_required
+@require_POST
+def template_withdraw(request, public_id):
+    template = visible_template_or_404(request, public_id)
+    require_perm(request, "documents.manage_document_templates", template)
+
+    services.withdraw_template(template, actor=request.user, request=request)
+    messages.success(
+        request,
+        # Said out loud because it is the question an administrator replacing a form
+        # will ask next, and the answer is the reason the copies exist.
+        _("Withdrawn from the library. Copies already on a case are not affected."),
+    )
+    return redirect("documents:template_library")
+
+
+@login_required
+def template_download(request, public_id):
+    """Hand a counselor the file itself — to print, or to fill in by hand.
+
+    The permission check and the audit row are inside ``open_template``, the way
+    ``download`` keeps them inside ``open_document``.
+    """
+    template = visible_template_or_404(request, public_id)
+
+    try:
+        frames = services.open_template(template, actor=request.user, request=request)
+    except FileNotFoundError:
+        logger.error("Template %s has no stored blob (%s)", template.pk, template.storage_key)
+        raise Http404 from None
+    except DecryptionError:
+        logger.error("Template %s failed to decrypt", template.pk)
+        raise Http404 from None
+
+    return encrypted_file_response(
+        frames,
+        filename=template.original_filename,
+        content_type=template.content_type,
+        byte_size=template.byte_size,
+    )
+
+
+@login_required
+def template_thumbnail(request, public_id):
+    """The library's preview, served inline. As ``thumbnail`` above, and as safe:
+    the bytes are a JPEG this application re-encoded itself."""
+    template = visible_template_or_404(request, public_id)
+    require_perm(request, "documents.view_document_templates")
+
+    if not template.has_thumbnail:
+        raise Http404
+
+    try:
+        data = services.open_thumbnail(template)
+    except (FileNotFoundError, DecryptionError):
+        raise Http404 from None
+
+    response = HttpResponse(data, content_type="image/jpeg")
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Cache-Control"] = "no-store, max-age=0"
+    response["Content-Security-Policy"] = "default-src 'none'; sandbox"
+    return response
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def template_use(request, case_public_id, public_id):
+    """Copy a template onto a case, under a name the counselor chooses.
+
+    The case is resolved and permission-checked *before* the template, which is the
+    order the two refusals should arrive in: somebody who may not put documents on
+    this case gets a 403 about the case rather than a 404 that also tells them
+    whether the template exists.
+    """
+    case = visible_case_or_404(request, case_public_id)
+    require_perm(request, "documents.use_document_template", case)
+    template = visible_template_or_404(request, public_id)
+
+    form = UseTemplateForm(request.POST or None, initial={"name": template.name})
+    if request.method == "POST" and form.is_valid():
+        try:
+            document = services.use_template(
+                template,
+                case=case,
+                actor=request.user,
+                title=form.cleaned_data["name"],
+                visibility=form.cleaned_data["visibility"],
+                request=request,
+            )
+        except services.UploadRejected as exc:
+            # Reachable if the scanner has learned a signature since the template was
+            # stored, or if it is unreachable. Shown rather than swallowed: the
+            # counselor needs to know the handout did not arrive on the case.
+            form.add_error(None, str(exc))
+        else:
+            messages.success(
+                request,
+                _("“%(name)s” has been added to %(case)s.")
+                % {"name": document.display_name, "case": case.label},
+            )
+            return redirect("documents:detail", public_id=document.public_id)
+
+    return render(
+        request,
+        "documents/template_use.html",
+        {"form": form, "case": case, "template": template},
+    )

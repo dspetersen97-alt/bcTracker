@@ -74,6 +74,12 @@ def links_for(user) -> list[NavLink]:
                     "The times counselees may book with you.",
                 ),
                 _link(
+                    "templates",
+                    "Document templates",
+                    "documents:template_library",
+                    "The ministry's forms and handouts, ready to put on a case.",
+                ),
+                _link(
                     "practice",
                     "Practice settings",
                     "counseling:counselor_profile_edit",
@@ -101,6 +107,12 @@ def links_for(user) -> list[NavLink]:
                     "Add a person",
                     "accounts:user_create",
                     "Create an account for a counselee, counselor or administrator.",
+                ),
+                _link(
+                    "templates",
+                    "Document templates",
+                    "documents:template_library",
+                    "The forms and handouts every counselor can use.",
                 ),
                 _link(
                     "mail_settings",

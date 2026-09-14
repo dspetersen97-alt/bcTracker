@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Document templates — bcTracker{% endblock %}
+
+{% comment %} Wide, like the other pages whose content is a table: five columns, one of
+   them a row of buttons. A reading measure would wrap every action onto its own
+   line. {% endcomment %}
+{% block main_class %}wide{% endblock %}
+
+{% block content %}
+<h1>Document templates</h1>
+<p class="muted">The ministry's forms, worksheets and handouts. Download one to print,
+  or put a copy on a case.</p>
+
+{% comment %} A plain GET form: the search term belongs in the URL so a counselor can
+   bookmark "intake" and so the Back link comes back to the same results. The case,
+   when there is one, is carried through as a hidden field — searching from a case
+   must not lose the errand somebody came on. {% endcomment %}
+<form method="get" class="filter-form">
+  <label for="q">Search</label>
+  <input type="search" name="q" id="q" value="{{ q }}" placeholder="intake, homework, anxiety">
+  {% if case %}<input type="hidden" name="case" value="{{ case.public_id }}">{% endif %}
+  <button type="submit">Search</button>
+</form>
+
+{% if case %}
+  {% comment %} Said on the page because the buttons below change meaning with it: this is
+     the library opened *for* a case, and "Use on this case" is about to name it. {% endcomment %}
+  <p class="notice">Choosing one will put a copy on
+    <a href="{% url 'counseling:case_detail' case.public_id %}">{{ case.label }}</a>.</p>
+{% endif %}
+
+{% if can_manage %}
+  <div class="actions">
+    <a class="button" href="{% url 'documents:template_upload' %}">Add a template</a>
+  </div>
+{% endif %}
+
+<table class="table">
+  <thead>
+    <tr><th></th><th>Name</th><th>Kind</th><th>File</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for template in templates %}
+      <tr>
+        <td class="thumb-cell">
+          {% if template.has_thumbnail %}
+            <img class="thumb" src="{% url 'documents:template_thumbnail' template.public_id %}"
+                 alt="Preview of {{ template.display_name }}" width="60">
+          {% endif %}
+        </td>
+        <td>
+          {{ template.name }}
+          {% if template.description %}<span class="help">{{ template.description }}</span>{% endif %}
+        </td>
+        <td>{{ template.get_kind_display }}</td>
+        <td>{{ template.original_filename }} ({{ template.byte_size|filesizeformat }})</td>
+        <td>
+          <div class="actions">
+            {% if case %}
+              <a class="button" href="{% url 'documents:template_use' case.public_id template.public_id %}">Use on this case</a>
+            {% endif %}
+            <a class="button quiet" href="{% url 'documents:template_download' template.public_id %}">Download</a>
+            {% if can_manage %}
+              <a class="button quiet" href="{% url 'documents:template_edit' template.public_id %}">Edit</a>
+              <form method="post" action="{% url 'documents:template_withdraw' template.public_id %}" class="inline-form">
+                {% csrf_token %}
+                <button type="submit" class="danger">Withdraw</button>
+              </form>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+    {% empty %}
+      <tr>
+        <td colspan="5" class="empty">
+          {% if q %}Nothing in the library matches “{{ q }}”.{% else %}The library is empty.{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

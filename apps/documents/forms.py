@@ -12,11 +12,38 @@ from django.conf import settings
 from django.utils.translation import gettext_lazy as _
 
 from apps.documents.filetypes import ALLOWED_EXTENSIONS
-from apps.documents.models import Document, DocumentKind, Visibility
+from apps.documents.models import Document, DocumentKind, DocumentTemplate, Visibility
 
 
 def _accept_attribute() -> str:
     return ",".join(sorted(ALLOWED_EXTENSIONS))
+
+
+def _size_limit_mb() -> int:
+    return settings.DOCUMENT_MAX_BYTES // 1024 // 1024
+
+
+def checked_upload(upload):
+    """The cheap refusals, shared by every form in this module that takes a file.
+
+    One function rather than one per form: the library's upload form and a
+    counselee's upload form must not drift into accepting different things, because
+    the service layer behind both of them accepts exactly one set.
+    """
+    extension = ("." + upload.name.rsplit(".", 1)[-1].lower()) if "." in upload.name else ""
+    if extension not in ALLOWED_EXTENSIONS:
+        raise forms.ValidationError(
+            _("“%(ext)s” files are not accepted. Allowed: %(allowed)s.")
+            % {
+                "ext": extension or upload.name,
+                "allowed": ", ".join(sorted(ALLOWED_EXTENSIONS)),
+            }
+        )
+    if upload.size and upload.size > settings.DOCUMENT_MAX_BYTES:
+        raise forms.ValidationError(
+            _("That file is too large. The limit is %(limit)s MB.") % {"limit": _size_limit_mb()}
+        )
+    return upload
 
 
 class DocumentUploadForm(forms.Form):
@@ -54,22 +81,7 @@ class DocumentUploadForm(forms.Form):
             del self.fields["visibility"]
 
     def clean_file(self):
-        upload = self.cleaned_data["file"]
-        extension = ("." + upload.name.rsplit(".", 1)[-1].lower()) if "." in upload.name else ""
-        if extension not in ALLOWED_EXTENSIONS:
-            raise forms.ValidationError(
-                _("“%(ext)s” files are not accepted. Allowed: %(allowed)s.")
-                % {
-                    "ext": extension or upload.name,
-                    "allowed": ", ".join(sorted(ALLOWED_EXTENSIONS)),
-                }
-            )
-        if upload.size and upload.size > settings.DOCUMENT_MAX_BYTES:
-            raise forms.ValidationError(
-                _("That file is too large. The limit is %(limit)s MB.")
-                % {"limit": settings.DOCUMENT_MAX_BYTES // 1024 // 1024}
-            )
-        return upload
+        return checked_upload(self.cleaned_data["file"])
 
 
 class DocumentEditForm(forms.ModelForm):
@@ -85,3 +97,74 @@ class DocumentEditForm(forms.ModelForm):
         model = Document
         fields = ["title", "description", "kind"]
         widgets = {"description": forms.Textarea(attrs={"rows": 3})}
+
+
+class DocumentTemplateUploadForm(forms.Form):
+    """Adding a form or handout to the library.
+
+    ``name`` is required here where a document's ``title`` is optional, because a
+    library is read by name: a shelf of ``PDI-v3-FINAL.pdf`` is a shelf nobody can
+    search. Left blank the service would fall back to the filename, and this is the
+    one place worth insisting instead.
+    """
+
+    file = forms.FileField(
+        label=_("File"),
+        widget=forms.ClearableFileInput(attrs={"accept": _accept_attribute()}),
+        help_text=_("PDF, Word (stored as PDF), Excel, a web page, or a photo. Up to %(limit)s MB.")
+        % {"limit": _size_limit_mb()},
+    )
+    name = forms.CharField(
+        max_length=200,
+        label=_("Name"),
+        help_text=_("What a counselor will look for it under."),
+    )
+    description = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 3}),
+        help_text=_("What it is for, and when to use it. Searched along with the name."),
+    )
+    kind = forms.ChoiceField(choices=DocumentKind.choices, initial=DocumentKind.HANDOUT)
+
+    def clean_file(self):
+        return checked_upload(self.cleaned_data["file"])
+
+
+class DocumentTemplateEditForm(forms.ModelForm):
+    """The label on the shelf, and nothing else.
+
+    The file itself is not replaceable, for the same reason a document's is not: the
+    recorded hash describes what was stored, and a template swapped underneath its
+    name would silently change what every counselor thought they were handing out.
+    A new version is a new template, and the old one is withdrawn.
+    """
+
+    class Meta:
+        model = DocumentTemplate
+        fields = ["name", "description", "kind"]
+        widgets = {"description": forms.Textarea(attrs={"rows": 3})}
+
+
+class UseTemplateForm(forms.Form):
+    """Copying a template onto a case: what to call it, and who may read it.
+
+    The name is prefilled with the template's and is editable, which is the whole
+    of what "use" means here — the copy is a document on that case from the moment
+    it is made, so calling it "Homework — week two" rather than "Weekly worksheet"
+    is the counselor's to decide.
+    """
+
+    name = forms.CharField(
+        max_length=200,
+        label=_("Name on the case"),
+        help_text=_("What this copy will be called. The template keeps its own name."),
+    )
+    visibility = forms.ChoiceField(
+        choices=Visibility.choices,
+        initial=Visibility.CASE_SHARED,
+        label=_("Who can see this"),
+        help_text=_(
+            "Shared with the case is the usual answer: a handout nobody on the "
+            "case can open has not been handed out."
+        ),
+    )

@@ -27,4 +27,30 @@ urlpatterns = [
     path("documents/<publicid:public_id>/edit/", views.edit, name="edit"),
     path("documents/<publicid:public_id>/share/", views.share, name="share"),
     path("documents/<publicid:public_id>/delete/", views.delete, name="delete"),
+    # The template library. Not nested under a case, because a template belongs to
+    # the ministry rather than to anybody's counseling — the one route here that does
+    # carry a case is ``template_use``, where the case is what is being written to.
+    path("templates/", views.template_library, name="template_library"),
+    path("templates/add/", views.template_upload, name="template_upload"),
+    path(
+        "templates/<publicid:public_id>/download/",
+        views.template_download,
+        name="template_download",
+    ),
+    path(
+        "templates/<publicid:public_id>/thumbnail/",
+        views.template_thumbnail,
+        name="template_thumbnail",
+    ),
+    path("templates/<publicid:public_id>/edit/", views.template_edit, name="template_edit"),
+    path(
+        "templates/<publicid:public_id>/withdraw/",
+        views.template_withdraw,
+        name="template_withdraw",
+    ),
+    path(
+        "cases/<publicid:case_public_id>/documents/from-template/<publicid:public_id>/",
+        views.template_use,
+        name="template_use",
+    ),
 ]

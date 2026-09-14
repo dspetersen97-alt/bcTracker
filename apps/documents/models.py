@@ -19,6 +19,14 @@ application, so it is worth reading closely rather than trusting:
 The row keeps the wrapped DEK, not the DEK. Reading a document therefore needs
 the master key from the environment as well as database access — a stolen
 database dump is metadata, not content.
+
+``DocumentTemplate`` at the bottom is the other model here, and it is the one that
+does *not* belong to anybody: the ministry's blank intake form, its homework
+sheets, its handouts. It carries no case and no counselee, which is why it is a
+separate model rather than a flag on ``Document`` — a template with a nullable
+``case`` would put "which rows have no owner" inside every access rule above, and
+the first query that forgot the ``case__isnull`` would list one ministry-wide file
+in the middle of somebody's counseling record.
 """
 
 from uuid import uuid4
@@ -29,7 +37,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from apps.core.models import PublicIdModel, SoftDeleteModel, SoftDeleteQuerySet, TimeStampedModel
-from apps.core.scoping import CaseScopedQuerySet
+from apps.core.scoping import ActorScopedQuerySet, CaseScopedQuerySet
 
 
 class Visibility(models.TextChoices):
@@ -262,3 +270,139 @@ class Document(PublicIdModel, SoftDeleteModel, TimeStampedModel):
     @property
     def is_shared_with_the_case(self) -> bool:
         return self.visibility == Visibility.CASE_SHARED
+
+
+class DocumentTemplateQuerySet(ActorScopedQuerySet, SoftDeleteQuerySet):
+    """Who may see the library at all.
+
+    ``ActorScopedQuerySet`` rather than ``CaseScopedQuerySet``: there is no case to
+    scope through, and the four roles do not divide here the way they do everywhere
+    else in this app. Staff who counsel see everything; the other two roles see
+    nothing, and that is the whole rule.
+
+    A counselee getting ``none()`` is the decision worth being explicit about. A
+    template is not confidential — it is a blank form — but the library is a staff
+    workspace, and a counselee who could list it would be reading the ministry's
+    internal paperwork rather than their own file. What reaches them is the copy a
+    counselor deliberately put on their case, which is an ordinary ``Document`` with
+    an ordinary visibility. ``financial_admin`` gets ``none()`` for the reason it
+    gets ``none()`` above: billing has no business in the counseling material.
+    """
+
+    def matching(self, term):
+        """Narrow to the templates a search term describes.
+
+        Name, description and filename together, because the three are where
+        somebody's word for a form actually lives: "intake" is in the name, "for a
+        first session with a couple" is in the description, and the file somebody
+        remembers as ``PDI.pdf`` is neither.
+        """
+        term = (term or "").strip()
+        if not term:
+            return self
+        return self.filter(
+            models.Q(name__icontains=term)
+            | models.Q(description__icontains=term)
+            | models.Q(original_filename__icontains=term)
+        )
+
+    def scope_for_admin(self, user):
+        return self
+
+    def scope_for_counselor(self, user):
+        # Every counselor sees every template. The library is one shelf for the
+        # whole ministry — a per-counselor shelf would mean the intake form was
+        # uploaded five times and four of them were out of date.
+        return self
+
+
+class DocumentTemplateManager(models.Manager.from_queryset(DocumentTemplateQuerySet)):
+    def get_queryset(self):
+        return super().get_queryset().alive()
+
+    def for_actor(self, user):
+        return self.get_queryset().for_actor(user)
+
+
+class DocumentTemplate(PublicIdModel, SoftDeleteModel, TimeStampedModel):
+    """A blank form, worksheet or handout, held once for the whole ministry.
+
+    Stored exactly like a document — sniffed content type, scanned, encrypted under
+    its own DEK, thumbnailed — because it goes through the same ``ingest`` pipeline
+    and because "the templates are the unencrypted ones" is a distinction nobody
+    would remember six months from now. It costs nothing to keep them sealed and it
+    means there is one answer to "what is on the document volume".
+
+    Withdrawing is a soft delete, as it is for a document. A template that has been
+    copied onto forty cases is referenced by forty audit rows, and those rows have to
+    keep pointing at something that can still be named.
+    """
+
+    name = models.CharField(
+        max_length=200,
+        help_text=_("What a counselor will look for. “Personal Data Inventory”, not “PDI-v3”."),
+    )
+    description = models.TextField(
+        blank=True,
+        help_text=_("What it is for, and when to use it. Searched along with the name."),
+    )
+    kind = models.CharField(max_length=20, choices=DocumentKind.choices, default=DocumentKind.OTHER)
+
+    # PROTECT, as Document.owner is: an account with history is deactivated rather
+    # than deleted, and "who put this in the library" is part of the record.
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="document_templates",
+    )
+
+    original_filename = models.CharField(max_length=255)
+    content_type = models.CharField(max_length=100)
+    byte_size = models.BigIntegerField()
+    sha256 = models.CharField(max_length=64, db_index=True)
+
+    storage_key = models.UUIDField(default=uuid4, unique=True, editable=False)
+    wrapped_dek = models.BinaryField(editable=False)
+    dek_nonce = models.BinaryField(editable=False)
+
+    thumbnail_key = models.UUIDField(null=True, blank=True, unique=True, editable=False)
+    thumbnail_wrapped_dek = models.BinaryField(null=True, blank=True, editable=False)
+    thumbnail_dek_nonce = models.BinaryField(null=True, blank=True, editable=False)
+
+    scan_status = models.CharField(max_length=20, choices=ScanStatus.choices)
+    scan_detail = models.CharField(max_length=200, blank=True)
+
+    objects = DocumentTemplateManager()
+    all_objects = models.Manager.from_queryset(DocumentTemplateQuerySet)()
+
+    class Meta:
+        # By name, not by date: a library is read by looking for something, and the
+        # newest addition is nobody's first guess about where the intake form is.
+        ordering = ["name"]
+        indexes = [models.Index(fields=["name"])]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(byte_size__gt=0), name="document_template_is_not_empty"
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(scan_status=ScanStatus.INFECTED),
+                name="infected_templates_are_never_stored",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(thumbnail_key__isnull=True)
+                | models.Q(thumbnail_wrapped_dek__isnull=False),
+                name="template_thumbnail_has_a_key",
+            ),
+        ]
+        permissions = []
+
+    def __str__(self) -> str:
+        return self.display_name
+
+    @property
+    def display_name(self) -> str:
+        return self.name or self.original_filename
+
+    @property
+    def has_thumbnail(self) -> bool:
+        return self.thumbnail_key is not None
