@@ -4,6 +4,12 @@
 {% block content %}
 <div class="card">
   <h1>Create a counselee account</h1>
+  {% comment %} Said before the form rather than after it, because joining somebody to a
+     case is a disclosure and the page should not do it silently. {% endcomment %}
+  {% if case %}
+    <p>They will be put on <a href="{% url 'counseling:case_detail' case.public_id %}">{{ case.label }}</a>
+      as soon as the account exists.</p>
+  {% endif %}
   <p class="muted">They will be emailed a link to set their own password, so nobody
     in the office ever knows it.</p>
 

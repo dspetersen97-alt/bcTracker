@@ -15,7 +15,6 @@ Two things these do that a plain ModelForm would not:
 """
 
 from django import forms
-from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 
 from apps.accounts.forms import UserCreateForm
@@ -40,6 +39,25 @@ def eligible_counselees():
     )
 
 
+#: The id the ``<datalist>`` on the New Case page is rendered with. Named once so
+#: that the element in the template and the ``list`` attribute on the widget cannot
+#: drift apart into a box with nothing behind it.
+COUNSELEE_DATALIST_ID = "counselee-options"
+
+
+def counselee_option(user) -> str:
+    """How one counselee appears in the New Case dropdown — and what typing it means.
+
+    The address is part of the text for two reasons. It is what makes each option
+    unique, and two people with the same name is not a hypothetical in a ministry
+    that has been running for a few years; uniqueness is what lets the string be
+    read back afterwards as exactly one person. It also gives the browser's own
+    type-ahead more to match on, so an administrator who remembers the address and
+    not the spelling of the surname still finds them.
+    """
+    return f"{user.full_name} ({user.email})"
+
+
 class CaseForm(forms.ModelForm):
     class Meta:
         model = Case
@@ -53,107 +71,135 @@ class CaseForm(forms.ModelForm):
 
 
 class CaseCreateForm(CaseForm):
-    """Opening a case, with the people on it chosen at the same time.
+    """Opening a case, with the counselee named at the same time.
 
     A case with nobody on it is not yet a case: nothing can be booked against it,
-    no document can be uploaded to it, and it appears in the list looking done.
-    The old page ended on "add the counselees next", which is one more step
-    between an administrator and a working case, and a step easy to leave undone.
+    no document can be uploaded to it, and it appears in the list looking done. So
+    the page asks who it is for — but it does not answer that question by putting
+    four hundred names on the screen and asking somebody to find one.
 
-    Checkboxes rather than a multi-select: picking two people out of a native
-    multi-select needs ctrl-click, which is the sort of thing that quietly loses
-    the second spouse. What the checkboxes list is a search result — see ``find``
-    below — because a ministry that has seen four hundred people should not be
-    scrolling through four hundred of them to open one case.
+    "Find a counselee" is a plain text box with a ``<datalist>`` behind it. Clicking
+    it opens the roster and typing narrows it, and both of those are the browser's
+    own doing: there is no JavaScript in this application, and the previous answer —
+    a search box with its own submit button, a list of checkboxes, and a draft in
+    the session so a search did not throw away the half-filled form — was a round
+    trip to the server for every narrowing of the list.
+
+    What was typed is read back in ``clean_counselee``. A name that matches nobody is
+    not an error; it is a counselee who has no account yet, which is the ordinary
+    state of affairs when a case is being opened. The case is opened either way and
+    the view carries the name on to the page that creates the account.
+
+    One counselee rather than several, which is the one thing lost with the
+    checkboxes. A couple's second spouse is added from the case page, where each
+    membership is audited as the disclosure it is; a datalist is a control for
+    naming one thing, and there is no scriptless way to make it name two.
     """
 
-    #: Narrows the list of counselees. Its own submit button on the page, because
-    #: without JavaScript the only thing that can filter a list is the server, and
-    #: the only way to ask the server is to send the form.
-    find = forms.CharField(
+    #: For the template's ``<datalist>`` element. Read off the form rather than
+    #: imported separately, so the element and the widget's ``list`` below cannot
+    #: come to disagree about which one is which.
+    datalist_id = COUNSELEE_DATALIST_ID
+
+    counselee = forms.CharField(
         required=False,
         label=_("Find a counselee"),
-        help_text=_("Part of a name or an address, then Search. Blank lists everybody."),
-    )
-
-    counselees = forms.ModelMultipleChoiceField(
-        queryset=User.objects.none(),
-        required=False,
-        widget=forms.CheckboxSelectMultiple,
-        label=_("Counselees on this case"),
-        help_text=_("More than one for a couple or a family. They can be added later too."),
+        widget=forms.TextInput(
+            attrs={
+                "list": COUNSELEE_DATALIST_ID,
+                # The browser's own saved-input history for this box would be a list
+                # of counselees' names, offered on the next open of the page — which
+                # in an office is not necessarily to the same person.
+                "autocomplete": "off",
+            }
+        ),
+        help_text=_(
+            "Click for the list, or start typing. Nobody by that name yet? Type it "
+            "anyway and you will be taken straight to creating the account."
+        ),
     )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["counselees"].queryset = self._offered()
-        self.fields["counselees"].label_from_instance = (
-            lambda user: f"{user.full_name} ({user.email})"
-        )
         #: The memberships ``save`` created, for the view to audit.
         self.members = []
+        #: ``(first, last)`` when what was typed named nobody, for the view to carry
+        #: on to the New Counselee page. ``None`` when an existing counselee was named.
+        self.person_to_create = None
+        self._roster = None
 
-    def _offered(self):
-        """The counselees this form will show — and, just as much, accept.
+    def roster(self):
+        """Every counselee this form offers — and, just as much, will accept.
 
-        A narrowed queryset is a narrowed *validator*: whoever is left out of it is
-        not a valid choice, and a form that filtered the list without saying so
-        would reject the person the administrator ticked before searching again. So
-        anybody already chosen is added back regardless of the search term, and the
-        term itself is read from the submitted data so that the queryset on a POST is
-        the same one the page was rendered with.
+        Evaluated once and kept, because the same list is both rendered into the
+        datalist and used to read back what was typed. Two evaluations of the
+        queryset could disagree if somebody were created in between, and the shape
+        that disagreement takes is the form rejecting a name the page itself offered.
         """
-        everybody = eligible_counselees()
-        term = (self._value_of("find") or "").strip()
-        if not term:
-            return everybody
+        if self._roster is None:
+            self._roster = list(eligible_counselees())
+        return self._roster
 
-        matching = Q()
-        for word in term.split():
-            # Every word has to match something, so "ada ashford" finds her and
-            # "ada" alone finds her too. Word by word rather than against the whole
-            # string, because no single column holds "Ada Ashford".
-            matching &= (
-                Q(first_name__icontains=word)
-                | Q(last_name__icontains=word)
-                | Q(email__icontains=word)
+    def options(self):
+        """The text of each ``<option>``, for the template to render."""
+        return [counselee_option(user) for user in self.roster()]
+
+    def clean_counselee(self):
+        """Read what was typed as a person, or as a person to create.
+
+        Three spellings are accepted as naming somebody: the option text the dropdown
+        inserts, an address on its own, and a full name on its own. The last one
+        matters — an administrator who typed "Ada Ashford" without ever opening the
+        list means Ada Ashford, and being told to pick her from a list she is already
+        correctly named on would be pedantry.
+
+        A full name two people share is the one thing that has to stop and ask,
+        because guessing there would put a case in front of the wrong person.
+
+        Whitespace is collapsed rather than stripped, so "Ada  Ashford" is Ada
+        Ashford, and case is ignored: this is a name typed into a box, not a
+        password.
+        """
+        typed = " ".join(self.cleaned_data["counselee"].split())
+        if not typed:
+            return None
+
+        wanted = typed.casefold()
+        matches = [user for user in self.roster() if counselee_option(user).casefold() == wanted]
+        if not matches:
+            matches = [
+                user
+                for user in self.roster()
+                if user.email.casefold() == wanted or user.full_name.casefold() == wanted
+            ]
+        if len(matches) > 1:
+            raise forms.ValidationError(
+                _(
+                    "More than one person is called that. Choose one from the list, "
+                    "which shows the email address as well."
+                )
             )
-        return everybody.filter(matching | Q(pk__in=self._chosen()))
+        if matches:
+            return matches[0]
 
-    def _value_of(self, name):
-        """What was submitted for ``name``, or what the page was rendered with."""
-        if self.is_bound:
-            return self.data.get(name)
-        return self.initial.get(name)
-
-    def _chosen(self):
-        """The counselee ids in hand, whether posted or restored from a draft.
-
-        Digits only. These reach a ``pk__in`` lookup, and a hand-built request is
-        free to put a word there — which would be a 500 on a page an administrator
-        uses every week rather than the empty result it deserves.
-        """
-        widget = self.fields["counselees"].widget
-        if self.is_bound:
-            raw = widget.value_from_datadict(self.data, self.files, "counselees") or []
-        else:
-            raw = self.initial.get("counselees") or []
-        ids = [getattr(value, "pk", value) for value in raw]
-        return [str(value) for value in ids if str(value).isdigit()]
+        # Nobody. The first space splits the name, so "Mary Jo Kelling" is Mary and
+        # "Jo Kelling" rather than three guesses — and whatever it gets wrong is
+        # visible in two prefilled fields on the very next page.
+        first, _space, last = typed.partition(" ")
+        self.person_to_create = (first, last)
+        return None
 
     def save(self, commit=True):
-        """The case and its memberships, or neither.
+        """The case and its membership, or neither.
 
         Wrapped by the view in a transaction. Membership is the fact every access
         rule in the application resolves through, so half of this landing would
         leave a case whose roster does not match what was submitted.
         """
         case = super().save(commit=commit)
-        if commit:
-            self.members = [
-                CaseMember.objects.create(case=case, counselee=counselee)
-                for counselee in self.cleaned_data["counselees"]
-            ]
+        counselee = self.cleaned_data.get("counselee")
+        if commit and counselee is not None:
+            self.members = [CaseMember.objects.create(case=case, counselee=counselee)]
         return case
 
 

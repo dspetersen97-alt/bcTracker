@@ -5,9 +5,9 @@
 <div class="card">
   <h1>Add a counselee to {{ case.label }}</h1>
   <p class="muted">After this they can see this case. Only counselees who already
-    have an account appear below —
+    have an account appear below — if they are new,
     <a href="{% url 'counseling:counselee_create' %}?case={{ case.public_id }}">create the
-    account first</a> if they are new.</p>
+    account</a> and they will be put on the case as soon as it exists.</p>
   <form method="post">
     {% csrf_token %}
     {% include "includes/form.html" %}

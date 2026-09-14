@@ -17,39 +17,37 @@
         <a class="button quiet" href="{% url 'counseling:case_detail' case.public_id %}">Go back</a>
       </div>
     {% else %}
-      {% comment %} Laid out field by field rather than through includes/form.html,
-         because the search box needs its own button beside it and the field loop
-         cannot put one there. tests/test_new_case_page.py asserts that every field on
-         the form reaches this page, so adding one to CaseCreateForm and forgetting it
-         here is a failure rather than a field nobody can fill in. {% endcomment %}
+      {% comment %} Laid out field by field rather than through includes/form.html, so the
+         datalist can be rendered next to the box that uses it.
+         tests/test_new_case_page.py asserts that every field on the form reaches this
+         page, so adding one to CaseCreateForm and forgetting it here is a failure
+         rather than a field nobody can fill in. {% endcomment %}
       {% include "includes/form_errors.html" %}
       {% include "includes/field.html" with field=form.label %}
       {% include "includes/field.html" with field=form.counselor %}
       {% include "includes/field.html" with field=form.kind %}
       {% include "includes/field.html" with field=form.notes %}
 
-      {% comment %} Search is a submit button, because with no JavaScript in this
-         application the only thing that can filter a list is the server. It is also
-         the *first* submit button in the form, and that is deliberate: pressing
-         Enter in a text field presses the first one, and "search again" is a
-         harmless thing to do by accident where "open the case" is not.
-         formnovalidate for the same reason — leaving to search is not the moment to
-         be told the label is missing. {% endcomment %}
-      <div class="field-with-aside">
-        {% include "includes/field.html" with field=form.find %}
-        <button type="submit" name="search" class="quiet" formnovalidate>Search</button>
-      </div>
-      {% include "includes/field.html" with field=form.counselees %}
+      {% comment %} The roster, as the browser's own type-ahead: clicking the box opens the
+         list and typing narrows it, with no request in between and no JavaScript, which
+         is the only reason this can be a dropdown at all. It is rendered from
+         ``form.options`` rather than from a queryset of its own so that what is offered
+         and what ``clean_counselee`` will accept are one list — see
+         apps/counseling/forms.py. Empty <option> bodies on purpose: a datalist option's
+         *value* is what the browser inserts into the box, and text between the tags as
+         well would show as a second column in some browsers and nothing in others. {% endcomment %}
+      {% include "includes/field.html" with field=form.counselee %}
+      <datalist id="{{ form.datalist_id }}">
+        {% for option in form.options %}<option value="{{ option }}"></option>
+        {% endfor %}
+      </datalist>
 
       <div class="actions">
         <button type="submit">Open case</button>
       </div>
 
-      <p class="muted">
-        Not on the list?
-        <button type="submit" name="create_counselee" class="link-button" formnovalidate>Create a counselee account</button>
-        — you will come back here with them ticked and everything you have typed still in place.
-      </p>
+      <p class="muted">Enter opens the case. A name that belongs to nobody yet is not a
+        mistake — the case is opened and the next page creates the account for it.</p>
     {% endif %}
   </form>
 </div>

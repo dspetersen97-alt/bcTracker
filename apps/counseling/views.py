@@ -40,7 +40,6 @@ from apps.counseling.forms import (
     CounseleeCreateForm,
     CounseleeProfileForm,
     CounselorProfileForm,
-    eligible_counselees,
 )
 from apps.counseling.models import (
     Case,
@@ -255,83 +254,36 @@ def case_detail(request, public_id):
     )
 
 
-#: Where a half-filled New Case form waits while its administrator is somewhere
-#: else. In the session rather than in the query string: a case label is usually a
-#: family's name, and a URL is written into every access log and handed to every
-#: page it links out to.
-CASE_DRAFT_SESSION_KEY = "counseling.case_create_draft"
-
-#: What is kept, named one by one rather than taken as "whatever was posted", so a
-#: field added to the page later does not quietly become session state as well.
-CASE_DRAFT_FIELDS = ("label", "counselor", "kind", "notes", "find")
-
-
-def _keep_case_draft(request):
-    """Put what has been typed so far where it will survive a redirect."""
-    request.session[CASE_DRAFT_SESSION_KEY] = {
-        **{name: request.POST.get(name, "") for name in CASE_DRAFT_FIELDS},
-        "counselees": request.POST.getlist("counselees"),
-    }
-
-
-def _resume_case_draft(request):
-    """The draft, and it is gone once read.
-
-    Popped rather than left in place because a draft is a page somebody was in the
-    middle of, not a preference: an administrator who abandoned a case last Tuesday
-    should not find it typed in for them today. The consequence to know about is that
-    two New Case tabs share one draft, and the second to be sent away wins.
-    """
-    return request.session.pop(CASE_DRAFT_SESSION_KEY, None) or {}
+#: Where the name typed into "Find a counselee" waits while the account for it is
+#: created. In the session rather than in the query string, because it is somebody's
+#: name and a URL is written into every access log and handed to every page it links
+#: out to. Keyed by the case it was typed on, so that the New Counselee page reached
+#: any other way never finds last Tuesday's abandoned name prefilled into it.
+NEW_COUNSELEE_SESSION_KEY = "counseling.counselee_to_create"
 
 
 @login_required
 @require_http_methods(["GET", "POST"])
 def case_create(request):
-    """Open a case, and put the counselees on it in the same step.
+    """Open a case, and name the counselee on it in the same step.
 
-    ``?counselee=<public id>`` pre-selects somebody, which is how the page that creates a
-    counselee hands them back: an administrator who left here to take on a new
-    counselee returns to find them already ticked rather than having to find them
-    in a list of everybody the ministry has ever seen.
+    "Find a counselee" is the browser's own type-ahead over the roster rather than a
+    search box and a list of checkboxes — see ``CaseCreateForm``, which is also where
+    the reason the draft machinery this view used to have is gone.
 
-    Two of the buttons on the page are not submissions of the form at all. "Search"
-    narrows the list of counselees, and "Create a counselee account" leaves to make
-    one. Both store the draft and come back to a fresh GET, which is worth doing for
-    three reasons: the page does not open covered in "this field is required" for
-    fields nobody has reached yet, a refresh afterwards does not re-post anything,
-    and nothing anybody typed ends up in a URL.
+    A name that matched nobody opens the case anyway and sends the administrator
+    straight on to create the account, with what they typed kept in the session and
+    only the case's own id in the URL. ``counselee_create`` puts the new account on
+    that case and lands on the case page, so the path from "open a case for the
+    Kellings" to a working case is two forms and no dead ends.
 
-    Adding a member has a real disclosure consequence, so each one is audited
+    Adding a member has a real disclosure consequence, so it is audited
     individually and with the same verb the membership page uses — the trail
     should not depend on which page the membership was created from.
     """
     require_perm(request, "counseling.add_case")
 
-    if request.method == "POST" and (
-        "search" in request.POST or "create_counselee" in request.POST
-    ):
-        _keep_case_draft(request)
-        if "search" in request.POST:
-            return redirect("counseling:case_create")
-        return redirect(
-            with_query(
-                reverse("counseling:counselee_create"),
-                next=reverse("counseling:case_create"),
-            )
-        )
-
-    initial = _resume_case_draft(request) if request.method == "GET" else {}
-    preselected = request.GET.getlist("counselee")
-    if preselected:
-        # Added to what the draft already had ticked rather than replacing it: an
-        # administrator who left to create the second spouse still wants the first.
-        initial["counselees"] = [
-            *initial.get("counselees", []),
-            *eligible_counselees().filter(public_id__in=preselected).values_list("pk", flat=True),
-        ]
-
-    form = CaseCreateForm(request.POST or None, initial=initial)
+    form = CaseCreateForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         with transaction.atomic():
             case = form.save()
@@ -352,6 +304,19 @@ def case_create(request):
                     counselee_id=str(member.counselee_id),
                     counselee_email=member.counselee.email,
                 )
+        if form.person_to_create:
+            first, last = form.person_to_create
+            request.session[NEW_COUNSELEE_SESSION_KEY] = {
+                "case": case.public_id,
+                "first_name": first,
+                "last_name": last,
+            }
+            messages.success(
+                request,
+                _("Case opened. %(name)s has no account yet — create it here.")
+                % {"name": " ".join(part for part in (first, last) if part)},
+            )
+            return redirect(with_query(reverse("counseling:counselee_create"), case=case.public_id))
         if form.members:
             messages.success(
                 request,
@@ -362,8 +327,9 @@ def case_create(request):
             messages.success(request, _("Case opened. Add the counselees next."))
         return redirect("counseling:case_detail", public_id=case.public_id)
 
-    # No URL for the New Counselee page in the context any more: leaving for it is a
-    # submission now, so that the draft can be kept, and the page posts back here.
+    # No link out to the New Counselee page: there is nothing to leave the page for
+    # any more. A name nobody has an account for is typed into the same box as a name
+    # somebody does, and the difference is worked out after the case is open.
     return render(request, "counseling/case_form.html", {"form": form, "case": None})
 
 
@@ -593,12 +559,19 @@ def counselee_create(request):
 
     Both ways back, because this page is only ever reached from somewhere else:
 
-      * ``?case=`` returns to adding them to an existing case;
+      * ``?case=`` puts the new account straight onto that case and lands on the case
+        page. It is how a case opened for somebody with no account finishes — see
+        ``case_create`` — and how "create the counselee" on the membership page
+        works, and in both places the next thing anybody wanted was this person on
+        that case. Doing it here rather than handing back to a form that asks again
+        is what makes the whole journey two forms;
       * ``?next=`` returns to whatever sent them, with ``counselee=<public id>`` added so
-        the New Case page can tick the person who did not exist a moment ago. A
-        redirect back to a half-filled form the administrator has to fill in from
-        memory is the kind of small friction that ends with the counselee being
-        created and then forgotten.
+        a page can pick up the person who did not exist a moment ago.
+
+    The first and last name arrive prefilled when they were typed into "Find a
+    counselee" on the New Case page. They come out of the session rather than the
+    query string, and only for the case they were typed on: see
+    ``NEW_COUNSELEE_SESSION_KEY``.
 
     When the invitation could not be emailed the account still exists and the link
     is shown once — the same fallback as the New Person page, and for the same
@@ -607,18 +580,46 @@ def counselee_create(request):
     """
     require_perm(request, "accounts.manage_users")
 
-    # Shape-checked before it reaches reverse(): a ``?case=`` that could not name a
-    # case would raise NoReverseMatch and turn a mistyped link into a 500. Dropping it
-    # falls through to the ``?next=`` branch, which is the safe half of the pair.
+    # Shape-checked before it reaches the database: a ``?case=`` that could not name a
+    # case at all is dropped rather than looked up, which falls through to the
+    # ``?next=`` branch — the safe half of the pair.
     next_case = request.GET.get("case", "")
     if not looks_like_public_id(next_case):
         next_case = ""
 
-    form = CounseleeCreateForm(request.POST or None)
+    # Resolved before anything is created, and through for_actor: an account created
+    # and then found to have nowhere to go is worse than a 404 on the way in. The
+    # permission asked for is the membership one, because joining somebody to a case
+    # is what this page is about to do on the way out.
+    case = None
+    if next_case:
+        case = visible_case_or_404(request, next_case)
+        require_perm(request, "counseling.manage_case_members", case)
+
+    typed = request.session.get(NEW_COUNSELEE_SESSION_KEY) or {}
+    initial = {}
+    if case is not None and typed.get("case") == case.public_id:
+        initial = {
+            "first_name": typed.get("first_name", ""),
+            "last_name": typed.get("last_name", ""),
+        }
+
+    form = CounseleeCreateForm(request.POST or None, initial=initial)
     if request.method == "POST" and form.is_valid():
         user = form.save(created_by=request.user, request=request)
-        if next_case:
-            after = reverse("counseling:case_member_add", args=[next_case])
+        request.session.pop(NEW_COUNSELEE_SESSION_KEY, None)
+        if case is not None:
+            with transaction.atomic():
+                member = CaseMember.objects.create(case=case, counselee=user)
+                record(
+                    AuditVerb.CASE_MEMBER_ADDED,
+                    actor=request.user,
+                    target=case,
+                    request=request,
+                    counselee_id=str(member.counselee_id),
+                    counselee_email=member.counselee.email,
+                )
+            after = reverse("counseling:case_detail", args=[case.public_id])
         else:
             # ``counselee=<public id>`` only when somebody asked to be sent back. The case
             # list has no use for it, and a parameter that does nothing invites the
@@ -641,17 +642,27 @@ def counselee_create(request):
                     "next_url": after,
                 },
             )
-        messages.success(
-            request,
-            _("Account created for %(name)s. An invitation is on its way to %(email)s.")
-            % {"name": user.full_name, "email": user.email},
-        )
+        if case is not None:
+            messages.success(
+                request,
+                _(
+                    "Account created for %(name)s and added to the case. An invitation "
+                    "is on its way to %(email)s."
+                )
+                % {"name": user.full_name, "email": user.email},
+            )
+        else:
+            messages.success(
+                request,
+                _("Account created for %(name)s. An invitation is on its way to %(email)s.")
+                % {"name": user.full_name, "email": user.email},
+            )
         return redirect(after)
 
     return render(
         request,
         "counseling/counselee_form.html",
-        {"form": form, "mail_reason": core_mail.unconfigured_reason(), "case_id": next_case},
+        {"form": form, "mail_reason": core_mail.unconfigured_reason(), "case": case},
     )
 
 
