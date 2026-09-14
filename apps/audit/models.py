@@ -91,6 +91,19 @@ class AuditVerb(models.TextChoices):
     DOCUMENT_TEMPLATE_DOWNLOADED = "document_template.downloaded", "Template downloaded"
     DOCUMENT_TEMPLATE_USED = "document_template.used", "Template copied onto a case"
 
+    # The knowledge base. Ministry material again, so these are not disclosure rows —
+    # but the shelf is one every counselor contributes to, and a shared shelf needs to
+    # be able to say who put a thing on it and who took it off. The comment verbs
+    # carry no body text, for the reason the messaging verbs below carry none: a
+    # second copy of what somebody wrote, outside the rules that govern the first, is
+    # a worse thing to hold than the absence of it in the trail.
+    KNOWLEDGE_RESOURCE_ADDED = "knowledge_resource.added", "Resource added"
+    KNOWLEDGE_RESOURCE_UPDATED = "knowledge_resource.updated", "Resource details updated"
+    KNOWLEDGE_RESOURCE_REMOVED = "knowledge_resource.removed", "Resource removed"
+    KNOWLEDGE_RESOURCE_DOWNLOADED = "knowledge_resource.downloaded", "Resource file downloaded"
+    KNOWLEDGE_COMMENT_ADDED = "knowledge_comment.added", "Comment left on a resource"
+    KNOWLEDGE_COMMENT_REMOVED = "knowledge_comment.removed", "Comment removed"
+
     # Messaging. A message body is never recorded here — the metadata carries a
     # character count and nothing else. The trail's job is who corresponded with
     # whom and when; putting the words in a second table would create a copy of

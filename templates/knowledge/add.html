@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Add a resource — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>Add a resource</h1>
+  <p class="role"><a href="{% url 'knowledge:home' %}">Knowledge base</a></p>
+
+  {% comment %} Said plainly, for the reason the template library says it: what goes here is
+     read by everyone who counsels, and nothing about a particular counselee belongs on
+     a shared shelf. A worksheet with somebody's answers on it goes on their case. {% endcomment %}
+  <p class="notice">Every counselor and administrator can see this. Share the blank
+    handout, the article, the link — never a counselee's own paperwork.</p>
+
+  {# enctype matters: without it the browser posts filenames, not files. #}
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {% include "includes/form.html" %}
+    <button type="submit">Add to the shelf</button>
+  </form>
+
+  <p class="muted">A file, a link, or both — a link to the article and the handout you
+    print from it belong on one entry. Files are scanned and stored encrypted, exactly
+    like a case document, and Word files are converted to PDF.</p>
+</div>
+{% endblock %}

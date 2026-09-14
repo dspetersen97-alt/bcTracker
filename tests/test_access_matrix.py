@@ -597,6 +597,116 @@ MATRIX = {
             "financial_admin": 403,
         },
     ),
+    # --- the knowledge base -------------------------------------------------
+    #
+    # One pattern across every row, and it is the feature's whole access rule: this
+    # shelf is for counselors and administrators. A counselee and a financial_admin
+    # get 404 wherever the route names a row — ``Resource.objects.for_actor`` returns
+    # none() for both, so nothing on the shelf exists as far as they are concerned —
+    # and 403 on the two routes that name none, because an empty page would be a claim
+    # about what colleagues have written and a refusal is not.
+    #
+    # Counselor and admin differ nowhere here, unlike the template library above.
+    # That is the point of the two features being separate: an administrator decides
+    # which intake form is current, and nobody decides which handout a colleague
+    # found helpful. The rows the two roles could differ on — editing and removing
+    # somebody *else's* contribution — are in tests/test_knowledge_base.py, since the
+    # scenario's counselor is the contributor here.
+    "knowledge:home": (
+        {},
+        "get",
+        {
+            "anonymous": 302,
+            "counselee": 403,
+            "counselor": 200,
+            "admin": 200,
+            "financial_admin": 403,
+        },
+    ),
+    "knowledge:add": (
+        {},
+        "get",
+        {
+            "anonymous": 302,
+            "counselee": 403,
+            "counselor": 200,
+            "admin": 200,
+            "financial_admin": 403,
+        },
+    ),
+    "knowledge:detail": (
+        lambda s: {"public_id": s.resource.public_id},
+        "get",
+        {
+            "anonymous": 302,
+            "counselee": 404,
+            "counselor": 200,
+            "admin": 200,
+            "financial_admin": 404,
+        },
+    ),
+    "knowledge:download": (
+        lambda s: {"public_id": s.resource.public_id},
+        "get",
+        # A real decryption of a blob the scenario wrote, as documents:download is.
+        {
+            "anonymous": 302,
+            "counselee": 404,
+            "counselor": 200,
+            "admin": 200,
+            "financial_admin": 404,
+        },
+    ),
+    "knowledge:edit": (
+        lambda s: {"public_id": s.resource.public_id},
+        "get",
+        {
+            "anonymous": 302,
+            "counselee": 404,
+            "counselor": 200,
+            "admin": 200,
+            "financial_admin": 404,
+        },
+    ),
+    "knowledge:remove": (
+        lambda s: {"public_id": s.resource.public_id},
+        "post",
+        {
+            "anonymous": 302,
+            "counselee": 404,
+            "counselor": 302,
+            "admin": 302,
+            "financial_admin": 404,
+        },
+    ),
+    "knowledge:comment": (
+        lambda s: {"public_id": s.resource.public_id},
+        "post",
+        # The matrix posts no body, so the two 302s are the "a note needs something in
+        # it" redirect rather than a comment being written. That is the right thing to
+        # assert here — this row is about who may reach the route — and the comment
+        # actually appearing is asserted in tests/test_knowledge_base.py.
+        {
+            "anonymous": 302,
+            "counselee": 404,
+            "counselor": 302,
+            "admin": 302,
+            "financial_admin": 404,
+        },
+    ),
+    "knowledge:comment_remove": (
+        lambda s: {"public_id": s.comment.public_id},
+        "post",
+        # The counselor's 302 is them removing their own note; the admin's is the
+        # override. A second counselor gets a 403 here, which is in the dedicated file.
+        {
+            "anonymous": 302,
+            "counselee": 404,
+            "counselor": 302,
+            "admin": 302,
+            "financial_admin": 404,
+        },
+    ),
     # --- messaging ---------------------------------------------------------
     #
     # The pattern to read across these rows: financial_admin never reaches

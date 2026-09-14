@@ -15,12 +15,19 @@ from apps.documents.filetypes import ALLOWED_EXTENSIONS
 from apps.documents.models import Document, DocumentKind, DocumentTemplate, Visibility
 
 
-def _accept_attribute() -> str:
+def accept_attribute() -> str:
     return ",".join(sorted(ALLOWED_EXTENSIONS))
 
 
-def _size_limit_mb() -> int:
+def size_limit_mb() -> int:
     return settings.DOCUMENT_MAX_BYTES // 1024 // 1024
+
+
+# These three are public — and imported by apps/knowledge/forms.py — for the reason
+# ``checked_upload`` below exists at all: every form in this application that takes a
+# file has to offer and refuse exactly the same set, because one service layer is
+# behind all of them. A knowledge base form with its own copy of the allowlist would
+# be the first place the two could disagree.
 
 
 def checked_upload(upload):
@@ -41,7 +48,7 @@ def checked_upload(upload):
         )
     if upload.size and upload.size > settings.DOCUMENT_MAX_BYTES:
         raise forms.ValidationError(
-            _("That file is too large. The limit is %(limit)s MB.") % {"limit": _size_limit_mb()}
+            _("That file is too large. The limit is %(limit)s MB.") % {"limit": size_limit_mb()}
         )
     return upload
 
@@ -49,7 +56,7 @@ def checked_upload(upload):
 class DocumentUploadForm(forms.Form):
     file = forms.FileField(
         label=_("File"),
-        widget=forms.ClearableFileInput(attrs={"accept": _accept_attribute()}),
+        widget=forms.ClearableFileInput(attrs={"accept": accept_attribute()}),
         # Word is named as being stored as a PDF because that is a surprise
         # otherwise: the file in the list is not the file that was chosen.
         help_text=_("PDF, Word (stored as PDF), Excel, a web page, or a photo. Up to %(limit)s MB.")
@@ -110,9 +117,9 @@ class DocumentTemplateUploadForm(forms.Form):
 
     file = forms.FileField(
         label=_("File"),
-        widget=forms.ClearableFileInput(attrs={"accept": _accept_attribute()}),
+        widget=forms.ClearableFileInput(attrs={"accept": accept_attribute()}),
         help_text=_("PDF, Word (stored as PDF), Excel, a web page, or a photo. Up to %(limit)s MB.")
-        % {"limit": _size_limit_mb()},
+        % {"limit": size_limit_mb()},
     )
     name = forms.CharField(
         max_length=200,

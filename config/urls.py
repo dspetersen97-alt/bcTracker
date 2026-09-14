@@ -32,6 +32,9 @@ urlpatterns = [
     # only route in this application a stranger may reach — see the note in
     # apps/billing/stripe/webhook.py.
     path("", include("apps.billing.urls")),
+    # The counselors' shared shelf: handouts, articles and links, with the comments
+    # they leave each other. Staff only — see apps/knowledge/models.py.
+    path("", include("apps.knowledge.urls")),
     # Cases, caseloads and the role router at /dashboard/. Listed last by
     # convention rather than necessity: the site root is apps.core's home page.
     path("", include("apps.counseling.urls")),

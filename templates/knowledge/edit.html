@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ resource.title }} — bcTracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>Edit this resource</h1>
+  <p class="role"><a href="{% url 'knowledge:detail' resource.public_id %}">{{ resource.title }}</a></p>
+
+  <form method="post">
+    {% csrf_token %}
+    {% include "includes/form.html" %}
+    <button type="submit">Save</button>
+    <a class="button quiet" href="{% url 'knowledge:detail' resource.public_id %}">Cancel</a>
+  </form>
+
+  {% comment %} The file is not on this form on purpose. Colleagues have commented
+     underneath about the thing they read, and swapping the bytes under the same title
+     would make those notes describe something nobody can see any more. The link is
+     editable, because a moved article is still the same article. {% endcomment %}
+  <p class="muted">To replace the file, add a new resource and take this one off the
+    shelf — the notes underneath belong to what people actually read.</p>
+</div>
+{% endblock %}

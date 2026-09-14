@@ -86,6 +86,9 @@ LOCAL_APPS = [
     # Sessions, invoices, and payments. Listed after scheduling because a session
     # record is raised from a booking that has been closed out.
     "apps.billing",
+    # The counselors' shared shelf of handouts, articles and links. After documents,
+    # whose ingest pipeline it stores its files through.
+    "apps.knowledge",
 ]
 
 INSTALLED_APPS = [*DJANGO_APPS, *THIRD_PARTY_APPS, *LOCAL_APPS]

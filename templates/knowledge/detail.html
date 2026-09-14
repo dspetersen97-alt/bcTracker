@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}{{ resource.title }} — bcTracker{% endblock %}
+
+{% block content %}
+<h1>{{ resource.title }}</h1>
+<p class="role"><a href="{% url 'knowledge:home' %}">Knowledge base</a></p>
+
+{% if resource.summary %}
+  <div class="card"><p>{{ resource.summary|linebreaksbr }}</p></div>
+{% endif %}
+
+<dl class="detail-list">
+  <dt>Kind</dt><dd>{{ resource.get_kind_display }}</dd>
+  {% if resource.topics %}<dt>Topics</dt><dd>{{ resource.topics }}</dd>{% endif %}
+  {% if resource.has_link %}
+    {% comment %} Opened in a new tab, and with rel="noopener noreferrer": this is the one
+       place in the application that links off it, and neither the referring URL nor a
+       handle on this window is anything an outside site needs. {% endcomment %}
+    <dt>Link</dt>
+    <dd><a href="{{ resource.url }}" target="_blank" rel="noopener noreferrer">{{ resource.url }}</a></dd>
+  {% endif %}
+  {% if resource.has_file %}
+    <dt>File</dt><dd>{{ resource.original_filename }} ({{ resource.byte_size|filesizeformat }})</dd>
+    <dt>Virus scan</dt><dd>{{ resource.get_scan_status_display }}</dd>
+  {% endif %}
+  <dt>Added by</dt><dd>{{ resource.contributed_by.full_name }}</dd>
+  <dt>Added</dt><dd>{{ resource.created_at }}</dd>
+</dl>
+
+<div class="actions">
+  {% if resource.has_file %}
+    <a class="button" href="{% url 'knowledge:download' resource.public_id %}">Download the file</a>
+  {% endif %}
+  {% if can_change %}
+    <a class="button quiet" href="{% url 'knowledge:edit' resource.public_id %}">Edit</a>
+  {% endif %}
+  {% if can_delete %}
+    <form method="post" action="{% url 'knowledge:remove' resource.public_id %}" class="inline-form">
+      {% csrf_token %}
+      <button type="submit" class="danger">Take off the shelf</button>
+    </form>
+  {% endif %}
+</div>
+
+<h2>What counselors have said</h2>
+
+{% comment %} The reason the notes are worth having on the page rather than behind a tab:
+   the useful sentence about a handout is usually not the contributor's, and it is
+   searched along with the summary — see ResourceQuerySet.matching. {% endcomment %}
+{% for comment in comments %}
+  <div class="said{% if comment.author_id == request.user.pk %} said-by-me{% endif %}">
+    <p class="said-who">{{ comment.author.full_name }}<span class="muted">{{ comment.created_at }}</span></p>
+    <p class="said-what">{{ comment.body|linebreaksbr }}</p>
+    {% comment %} ``may_remove`` is set in the view by asking the permission itself, rather
+       than by restating "the author, or an administrator" in the markup where it could
+       drift from apps/knowledge/rules.py. {% endcomment %}
+    {% if comment.may_remove %}
+      <form method="post" action="{% url 'knowledge:comment_remove' comment.public_id %}" class="inline-form">
+        {% csrf_token %}
+        <button type="submit" class="link-button">Remove</button>
+      </form>
+    {% endif %}
+  </div>
+{% empty %}
+  <p class="muted">Nothing yet. If you have used this, say how it went.</p>
+{% endfor %}
+
+{% if form %}
+  <div class="card">
+    <form method="post" action="{% url 'knowledge:comment' resource.public_id %}">
+      {% csrf_token %}
+      {% include "includes/form.html" %}
+      <button type="submit">Add the note</button>
+    </form>
+  </div>
+{% endif %}
+{% endblock %}

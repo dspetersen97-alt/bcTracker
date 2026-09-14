@@ -80,6 +80,12 @@ def links_for(user) -> list[NavLink]:
                     "The ministry's forms and handouts, ready to put on a case.",
                 ),
                 _link(
+                    "knowledge",
+                    "Knowledge base",
+                    "knowledge:home",
+                    "What has helped, on anxiety, grief and the rest — and what colleagues said.",
+                ),
+                _link(
                     "practice",
                     "Practice settings",
                     "counseling:counselor_profile_edit",
@@ -113,6 +119,12 @@ def links_for(user) -> list[NavLink]:
                     "Document templates",
                     "documents:template_library",
                     "The forms and handouts every counselor can use.",
+                ),
+                _link(
+                    "knowledge",
+                    "Knowledge base",
+                    "knowledge:home",
+                    "The resources counselors share with each other, and their notes on them.",
                 ),
                 _link(
                     "mail_settings",

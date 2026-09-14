@@ -189,6 +189,7 @@ def scenario(db, make_user):
     from apps.billing.models import Fee, FeeKind, PaymentMethod
     from apps.counseling.models import Case, CaseMember, CounseleeProfile
     from apps.documents.services import store_document, store_template
+    from apps.knowledge.services import add_comment, store_resource
     from apps.messaging.services import close_thread, start_thread
     from apps.scheduling.models import (
         AvailabilityOverride,
@@ -220,6 +221,25 @@ def scenario(db, make_user):
             uploaded_by=actor if role == Role.ADMIN else make_user(Role.ADMIN),
             upload=SimpleUploadedFile("intake-form.jpg", jpeg_bytes()),
             name="Intake form",
+        )
+
+        # One resource on the knowledge base's shelf, with one comment on it, both
+        # made by the case's counselor. That ownership is what makes the matrix rows
+        # meaningful: a counselor acting is the contributor, so their 200 on the edit
+        # page is about the role being allowed to tidy its own contributions, and an
+        # administrator's is about overseeing anybody's. A real file again, so the
+        # download row asserts a genuine decryption rather than a 404.
+        resource = store_resource(
+            contributed_by=counselor,
+            title="Handling anxious thoughts",
+            summary="A worksheet we hand out after a first session.",
+            topics="anxiety",
+            upload=SimpleUploadedFile("anxiety-worksheet.jpg", jpeg_bytes()),
+        )
+        comment = add_comment(
+            resource,
+            author=counselor,
+            body="Used this with two cases; both found the second page the useful one.",
         )
 
         rule = AvailabilityRule.objects.create(
@@ -321,6 +341,8 @@ def scenario(db, make_user):
             profile=profile,
             document=document,
             template=template,
+            resource=resource,
+            comment=comment,
             rule=rule,
             override=override,
             booking=booking,
