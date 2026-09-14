@@ -53,6 +53,15 @@ def practice(counselor, counselee):
     return SimpleNamespace(case=case, counselor=counselor, counselee=counselee)
 
 
+def counselee_select(page: str) -> str:
+    """Just the "who is this for" dropdown, so a count of options means something."""
+    import re
+
+    match = re.search(r'<select name="counselee".*?</select>', page, re.DOTALL)
+    assert match, "the scheduling page has no counselee dropdown"
+    return match.group(0)
+
+
 def next_weekday(weekday: int, *, zone, hour=14):
     """The next occurrence of ``weekday`` at ``hour``, in ``zone``. Always ahead."""
     today = timezone.now().astimezone(zone).date()
@@ -544,6 +553,41 @@ class TestTheSchedulingPage:
         )
 
         assert Booking.objects.get(case=practice.case).meeting_url == "https://meet.example.org/ada"
+
+    def test_who_it_is_for_arrives_answered(self, practice, client, sign_in):
+        """A counselor scheduling on a case already knows whose case it is.
+
+        It was a required question with one possible answer, and the blank was the
+        field most easily left alone — which fails the form after a date, a time and a
+        length have already been typed.
+        """
+        sign_in(practice.counselor)
+
+        page = client.get(
+            reverse("scheduling:schedule", kwargs={"case_public_id": practice.case.public_id})
+        ).content.decode()
+
+        select = counselee_select(page)
+        assert f'value="{practice.counselee.pk}" selected' in select
+        assert "---------" not in select, "a blank option is a default nobody wants"
+
+    def test_a_couples_case_still_offers_the_other_one(self, practice, client, sign_in, make_user):
+        """The default is preselected, not decided. Both members are in the list and
+        exactly one is chosen, so a counselor booking for the other changes a select
+        rather than being asked a question they have already answered by opening the
+        case."""
+        other = make_user(Role.COUNSELEE, first_name="Ben", last_name="Ashford")
+        CaseMember.objects.create(case=practice.case, counselee=other)
+        sign_in(practice.counselor)
+
+        page = client.get(
+            reverse("scheduling:schedule", kwargs={"case_public_id": practice.case.public_id})
+        ).content.decode()
+
+        select = counselee_select(page)
+        assert f'value="{practice.counselee.pk}"' in select
+        assert f'value="{other.pk}"' in select
+        assert select.count("selected") == 1
 
     def test_a_counselee_cannot_reach_the_recurring_form(self, practice, client, sign_in):
         sign_in(practice.counselee)

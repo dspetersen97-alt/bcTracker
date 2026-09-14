@@ -199,8 +199,21 @@ class BookingDetailsForm(forms.Form):
         # Only current members. Booking an ended membership would create an
         # appointment the model's own clean() then refuses, which is a confusing
         # way to learn that somebody left the case.
-        self.fields["counselee"].queryset = case.counselees.order_by("last_name", "first_name")
+        members = case.counselees.order_by("last_name", "first_name")
+        self.fields["counselee"].queryset = members
         self.fields["counselee"].label_from_instance = lambda user: user.full_name
+        # Preselected, with no blank first option. Nearly every case has exactly one
+        # counselee, so "who is this for" was a required question with a single
+        # possible answer that a counselor had to give by hand every time — and the
+        # blank was the field most often left as it was, which fails the form on the
+        # one page where the counselor has already typed a date, a time, and a length.
+        #
+        # On a couple's case it selects the first member by name rather than guessing,
+        # and the select still shows who that is. A default somebody can see and
+        # change is better than a blank that has to be filled in even when there is
+        # nothing to decide.
+        self.fields["counselee"].empty_label = None
+        self.fields["counselee"].initial = members.first()
 
     @property
     def counselor_zone(self):
