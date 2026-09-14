@@ -22,10 +22,11 @@ import io
 import zipfile
 
 import pytest
+from django.conf import settings
 from PIL import Image
 from PIL.TiffImagePlugin import IFDRational
 
-from apps.documents import filetypes, images, scanning
+from apps.documents import filetypes, images, pdfpages, scanning
 from tests.conftest import jpeg_bytes
 
 # --- helpers ---------------------------------------------------------------
@@ -69,6 +70,45 @@ def upload(name: str, data: bytes):
     from django.core.files.uploadedfile import SimpleUploadedFile
 
     return SimpleUploadedFile(name, data)
+
+
+def noisy_image(size=(1200, 900), *, transparent=False, image_format="JPEG") -> bytes:
+    """An image that does not compress away, unlike a flat rectangle.
+
+    ``jpeg_bytes`` makes one solid colour, and a 4000×3000 solid colour is a few
+    kilobytes — so it would satisfy every size budget below without a single pixel
+    being given up, and the tests would pass on a compressor that did nothing.
+    Gaussian noise is the opposite extreme: it is what the detail in a photograph
+    looks like to an encoder, with none of the flat areas that compress well, so a
+    test written against it is written against the worst case.
+    """
+    image = Image.merge("RGB", [Image.effect_noise(size, 48) for _ in range(3)])
+    if transparent:
+        image.putalpha(Image.effect_noise(size, 48))
+    buffer = io.BytesIO()
+    image.save(buffer, format=image_format)
+    return buffer.getvalue()
+
+
+def real_pdf(pages=1, first_page_size=(612, 792)) -> bytes:
+    """A PDF with actual pages in it, which PDFium will agree to render.
+
+    ``PDF`` above is a header and a trailer: enough to be *identified* as a PDF, which
+    is all the tests about identification need, and nothing a renderer can do anything
+    with. Later pages are deliberately a different shape from the first, so a test can
+    tell which one came back.
+    """
+    from reportlab.pdfgen.canvas import Canvas
+
+    buffer = io.BytesIO()
+    pdf = Canvas(buffer, pagesize=first_page_size)
+    for number in range(pages):
+        if number:
+            pdf.setPageSize((300, 1000))
+        pdf.drawString(72, 200, f"Page {number + 1} of a counselee's disclosure")
+        pdf.showPage()
+    pdf.save()
+    return buffer.getvalue()
 
 
 def photo_with_location() -> bytes:
@@ -485,3 +525,143 @@ class TestThumbnails:
     def test_no_thumbnail_rather_than_a_failed_upload(self):
         """A missing preview is cosmetic; losing the document is not."""
         assert images.make_thumbnail(PDF) is None
+
+
+class TestKeepingImagesSmall:
+    """The size budget, which every image is re-encoded towards on the way in.
+
+    A phone photograph of a two-page consent form is ten megabytes describing a sheet
+    of white paper, and every copy of it is on the encrypted volume and in every
+    backup from now on. So the re-encode that strips the EXIF also compresses, and the
+    order it gives things up in is what these tests are about: quality first, because
+    that is invisible on a photograph, and pixels only afterwards, because pixels are
+    what a counselor is trying to read.
+    """
+
+    def test_the_goal_is_a_megabyte(self):
+        """Named here because it is the requirement, not a tuning knob somebody
+        picked: an uploaded image should not cost more than a megabyte to keep."""
+        assert settings.DOCUMENT_IMAGE_TARGET_BYTES <= 1024 * 1024
+
+    def test_a_photograph_ends_up_under_the_budget(self, settings):
+        settings.DOCUMENT_IMAGE_TARGET_BYTES = 60_000
+
+        stored, _ = images.strip_metadata(noisy_image(), content_type="image/jpeg")
+
+        assert len(stored) <= 60_000
+
+    def test_a_real_photograph_fits_the_default_budget(self):
+        """The whole point, at the size the files actually arrive at. Twelve
+        megapixels of noise is a worse case than any camera produces."""
+        stored, _ = images.strip_metadata(noisy_image(size=(4032, 3024)), content_type="image/jpeg")
+
+        assert len(stored) < 1024 * 1024
+
+    def test_quality_is_given_up_before_pixels_are(self, settings):
+        """A budget one quality step away must not cost any resolution. The document
+        being photographed is often handwriting in a margin."""
+        original = noisy_image(size=(600, 400))
+        at_top_quality, _ = images.strip_metadata(original, content_type="image/jpeg")
+        settings.DOCUMENT_IMAGE_TARGET_BYTES = len(at_top_quality) - 1
+
+        stored, _ = images.strip_metadata(original, content_type="image/jpeg")
+
+        assert len(stored) <= settings.DOCUMENT_IMAGE_TARGET_BYTES
+        assert Image.open(io.BytesIO(stored)).size == (600, 400)
+
+    def test_pixels_go_when_quality_is_not_enough(self, settings):
+        settings.DOCUMENT_IMAGE_TARGET_BYTES = 20_000
+
+        stored, _ = images.strip_metadata(noisy_image(), content_type="image/jpeg")
+
+        assert Image.open(io.BytesIO(stored)).size < (1200, 900)
+
+    def test_an_image_that_already_fits_keeps_every_pixel(self):
+        stored, content_type = images.strip_metadata(
+            jpeg_bytes(size=(400, 300)), content_type="image/jpeg"
+        )
+
+        assert Image.open(io.BytesIO(stored)).size == (400, 300)
+        assert content_type == "image/jpeg"
+
+    def test_a_photograph_saved_as_a_png_is_stored_as_a_jpeg(self, settings):
+        """PNG has no quality dial, only pixels to throw away, so a lossless
+        photograph — a screenshot pasted in, an export that defaulted wrong — is
+        converted rather than shrunk. Which is why the caller has to use the content
+        type this returns instead of the one it passed in."""
+        settings.DOCUMENT_IMAGE_TARGET_BYTES = 60_000
+
+        stored, content_type = images.strip_metadata(
+            noisy_image(image_format="PNG"), content_type="image/png"
+        )
+
+        assert content_type == "image/jpeg"
+        assert Image.open(io.BytesIO(stored)).format == "JPEG"
+        assert len(stored) <= 60_000
+
+    def test_a_transparent_png_stays_a_png_and_loses_pixels_instead(self, settings):
+        """Something drawn on transparency is a diagram, and flattening it onto white
+        would change what it is a picture of. Losing resolution is the smaller loss."""
+        settings.DOCUMENT_IMAGE_TARGET_BYTES = 60_000
+
+        stored, content_type = images.strip_metadata(
+            noisy_image(size=(600, 400), transparent=True, image_format="PNG"),
+            content_type="image/png",
+        )
+        image = Image.open(io.BytesIO(stored))
+
+        assert content_type == "image/png"
+        assert image.mode == "RGBA"
+        assert image.size < (600, 400)
+
+    def test_an_image_that_will_not_fit_is_still_stored(self, settings):
+        """The budget is a target for storage, not a rule about what a counselee may
+        send. ``DOCUMENT_MAX_BYTES`` is that rule, and it ran before this."""
+        settings.DOCUMENT_IMAGE_TARGET_BYTES = 1
+
+        stored, _ = images.strip_metadata(noisy_image(), content_type="image/jpeg")
+
+        assert stored
+        assert Image.open(io.BytesIO(stored)).format == "JPEG"
+
+
+class TestRenderingTheFirstPageOfAPdf:
+    """Where a PDF's thumbnail comes from. A counseling file is mostly PDFs, and a
+    documents page of identical grey icons is a list somebody opens one row at a time
+    to find the form they would have recognised on sight."""
+
+    def test_a_page_comes_back_as_an_image(self):
+        rendered = pdfpages.render_first_page(real_pdf())
+
+        image = Image.open(io.BytesIO(rendered))
+        assert image.format == "PNG"
+        assert image.width > 320, "large enough to still be shrunk to a thumbnail"
+
+    def test_it_is_the_first_page(self):
+        """Later pages in this fixture are a different shape, so the aspect ratio is
+        the answer: a tall letter page, not the narrow strip that follows it."""
+        image = Image.open(io.BytesIO(pdfpages.render_first_page(real_pdf(pages=3))))
+
+        assert round(image.width / image.height, 2) == round(612 / 792, 2)
+
+    def test_it_can_be_turned_into_a_thumbnail(self):
+        """The two halves are separate modules, and this is the seam between them:
+        what the renderer produces has to be something Pillow will accept."""
+        thumbnail = images.make_thumbnail(pdfpages.render_first_page(real_pdf()))
+
+        assert Image.open(io.BytesIO(thumbnail)).format == "JPEG"
+
+    @pytest.mark.parametrize(
+        ("description", "data"),
+        [
+            ("a header and nothing else", PDF),
+            ("not a PDF at all", EXECUTABLE),
+            ("an empty file", b""),
+            ("a truncated one", real_pdf()[:200]),
+        ],
+    )
+    def test_anything_it_cannot_read_is_a_missing_thumbnail(self, description, data):
+        """A C library is being handed a file somebody chose, and the ways it can
+        object are not ours to enumerate. Every one of them has to end in None: the
+        document is already stored by then, and it must not be lost over a preview."""
+        assert pdfpages.render_first_page(data) is None, description

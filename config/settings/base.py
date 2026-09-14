@@ -406,6 +406,15 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
 FILE_UPLOAD_PERMISSIONS = 0o600
 FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o700
 
+# What an image should come out at once it has been re-encoded on ingest. Not a
+# limit — DOCUMENT_MAX_BYTES above is the limit, and it is enforced on the way in.
+# This is the budget apps/documents/images.py compresses towards: an unedited phone
+# photograph of a consent form is ten megabytes describing a sheet of white paper,
+# and every copy of it lives on the encrypted volume and in every backup. Quality is
+# lowered first, dimensions only after that, and an image that will not fit is stored
+# at the smallest attempt rather than refused.
+DOCUMENT_IMAGE_TARGET_BYTES = env.int("DOCUMENT_IMAGE_TARGET_BYTES", default=1024 * 1024)
+
 
 # --- Document encryption --------------------------------------------------
 

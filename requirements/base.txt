@@ -47,6 +47,15 @@ cryptography==50.0.1
 # the photo is of a counselee's home or family.
 pillow==12.3.0
 
+# First-page thumbnails for PDFs, which is most of what a counseling file holds.
+# PDFium is the renderer Chrome uses on the same file, and this ships it as a wheel
+# with the library bundled — poppler and LibreOffice are the alternatives, and both
+# are system packages measured in hundreds of megabytes for a preview nobody would
+# miss if it failed. It decodes an uploaded file in C, so the bounds on that are
+# written down in apps/documents/pdfpages.py: after the scan, page one only, and
+# every failure is a missing thumbnail rather than a lost document.
+pypdfium2==5.13.0
+
 # ClamAV client. The daemon runs as its own compose service; this only speaks to
 # it over a socket, so nothing about virus definitions lives in this image.
 clamd==1.0.2

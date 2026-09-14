@@ -33,7 +33,7 @@ from django.db import transaction
 
 from apps.audit.models import AuditVerb
 from apps.audit.services import record, record_or_raise
-from apps.documents import crypto, images, ingest, storage
+from apps.documents import crypto, images, ingest, pdfpages, storage
 from apps.documents.ingest import UploadRejected as UploadRejected  # re-exported
 from apps.documents.ingest import UploadTooLarge
 from apps.documents.models import Document, DocumentKind, ScanStatus, Visibility
@@ -119,8 +119,9 @@ def store_document(
             document.dek_nonce = blob.dek_nonce
             written.append(document.storage_key)
 
-            if accepted.is_image:
-                _attach_thumbnail(document, accepted.data, written)
+            preview = thumbnail_source(accepted.data, accepted.content_type)
+            if preview:
+                _attach_thumbnail(document, preview, written)
 
             document.save()
             # In the same transaction as the row: a document that exists without a
@@ -147,6 +148,75 @@ def store_document(
         raise
 
     return document
+
+
+def thumbnail_source(data: bytes, content_type: str) -> bytes | None:
+    """The bytes a preview should be made from, or None if there are none.
+
+    An image is its own preview. A PDF's is its first page, rendered — which is most
+    of a counseling file, and a documents page where every row but the photographs
+    showed the same grey icon was a list somebody had to open one by one to find the
+    intake form they would have recognised on sight.
+
+    A Word file arrives here as the PDF it was converted to, so it gets a page image
+    too, and it is the *converted* page — which is honest, since that conversion is
+    what a counselor will be reading.
+
+    Dispatched on the content type this application decided the file has, after the
+    signature check and after any conversion, never on anything the browser said.
+    """
+    if content_type.startswith("image/"):
+        return data
+    if content_type == "application/pdf":
+        return pdfpages.render_first_page(data)
+    return None
+
+
+def backfill_thumbnail(document) -> bool:
+    """Store a preview for a document that has none. True if one was made.
+
+    For files stored before their type had a renderer — which is every PDF uploaded
+    before this application could render one. A management command
+    (``backfill_thumbnails``) is the only caller, and that is deliberate: this
+    decrypts a counselee's file and writes a new blob, which is not something a page
+    load should do because somebody scrolled past a row.
+
+    Not audited, for the reason ``open_thumbnail`` is not: nobody has seen anything.
+    The operator running it is in the deployment's own logs, and no disclosure has
+    taken place.
+    """
+    if document.has_thumbnail:
+        return False
+
+    data = b"".join(
+        ingest.unseal(
+            storage_key=document.storage_key,
+            wrapped_dek=document.wrapped_dek,
+            dek_nonce=document.dek_nonce,
+        )
+    )
+    preview = thumbnail_source(data, document.content_type)
+    if not preview:
+        return False
+
+    written: list = []
+    try:
+        with transaction.atomic():
+            _attach_thumbnail(document, preview, written)
+            if not written:
+                return False
+            document.save(
+                update_fields=[
+                    "thumbnail_key",
+                    "thumbnail_wrapped_dek",
+                    "thumbnail_dek_nonce",
+                    "updated_at",
+                ]
+            )
+    except BaseException:
+        ingest.discard(written)
+        raise
+    return True
 
 
 def _attach_thumbnail(document, data: bytes, written: list) -> None:
