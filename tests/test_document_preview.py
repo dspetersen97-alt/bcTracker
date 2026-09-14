@@ -31,11 +31,12 @@ import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
+from apps.accounts.models import Role
 from apps.audit.models import AuditEvent, AuditVerb
 from apps.core.downloads import may_be_shown_inline
 from apps.counseling.models import Case, CaseMember
 from apps.documents import services
-from apps.documents.models import Visibility
+from apps.documents.models import Document, Visibility
 from tests.conftest import jpeg_bytes
 
 pytestmark = pytest.mark.django_db
@@ -333,6 +334,29 @@ class TestWhatThePageOffers:
         assert rule, "the stylesheet has no rule for .document-viewer"
         assert "height:" in rule.group(1)
 
+    def test_the_viewer_gets_the_wider_measure(self, client, sign_in, counselee, store):
+        """A letter page inside a 44rem reading column is the document rendered
+        smaller than it was printed, read by zooming in and scrolling sideways. The
+        width has to come from the page, because the frame is 100% of what it is
+        given — and it cannot be an inline style; see tests/test_security_headers.py.
+        """
+        document = store()
+        sign_in(counselee)
+
+        page = client.get(reverse("documents:detail", args=[document.public_id])).content.decode()
+
+        assert re.search(r'<main id="main" class="[^"]*\bwide\b', page)
+
+    def test_an_image_keeps_the_reading_measure(self, client, sign_in, counselee, store):
+        """The width is for the viewer, not for the page. A photograph is shown at its
+        own size and the description beside it is prose."""
+        document = store(name="photo.jpg", data=jpeg_bytes())
+        sign_in(counselee)
+
+        page = client.get(reverse("documents:detail", args=[document.public_id])).content.decode()
+
+        assert not re.search(r'<main id="main" class="[^"]*\bwide\b', page)
+
     def test_nothing_is_offered_for_a_type_the_browser_cannot_render(
         self, client, sign_in, counselee, store
     ):
@@ -343,6 +367,97 @@ class TestWhatThePageOffers:
         page = client.get(reverse("documents:detail", args=[document.public_id])).content.decode()
 
         assert preview_url(document) not in page
+
+
+class TestReadingThroughACasesDocuments:
+    """The Next button, which is what turns eleven documents into one sitting.
+
+    Without it, reading a case's file is: list, document, back, list, document, back.
+    The rule it follows is that it hands over the next row of the case's own list —
+    newest first, so the one uploaded just before this one — and that it is resolved
+    through ``for_actor``, so it can never step onto something the reader was not going
+    to be shown.
+    """
+
+    def detail_page(self, client, document):
+        return client.get(reverse("documents:detail", args=[document.public_id])).content.decode()
+
+    def test_the_next_row_of_the_list_is_offered(self, client, sign_in, counselee, store):
+        older = store(name="intake.pdf")
+        newer = store(name="consent.pdf")
+        sign_in(counselee)
+
+        page = self.detail_page(client, newer)
+
+        assert reverse("documents:detail", args=[older.public_id]) in page
+        assert "Next document" in page
+
+    def test_the_last_one_offers_nothing(self, client, sign_in, counselee, store):
+        """Absent rather than disabled: a control that does nothing invites the click
+        that proves it does nothing."""
+        oldest = store(name="intake.pdf")
+        store(name="consent.pdf")
+        sign_in(counselee)
+
+        assert "Next document" not in self.detail_page(client, oldest)
+
+    def test_it_never_steps_onto_something_the_reader_cannot_open(
+        self, client, sign_in, counselee, make_user, case, store
+    ):
+        """A spouse's private upload sits between two of theirs in the case's history.
+        Next skips it in silence — offering it and refusing it would be worse than not
+        offering it, and even a gap in the sequence would say something."""
+        other_counselee = make_user(Role.COUNSELEE)
+        CaseMember.objects.create(case=case, counselee=other_counselee)
+        mine_first = store(name="my-intake.pdf")
+        store(name="theirs.pdf", owner=other_counselee)
+        mine_last = store(name="my-consent.pdf")
+        sign_in(counselee)
+
+        page = self.detail_page(client, mine_last)
+
+        assert reverse("documents:detail", args=[mine_first.public_id]) in page
+
+    def test_a_document_on_another_case_is_never_next(
+        self, client, sign_in, counselee, counselor, store
+    ):
+        """The sequence is one case's documents. Stepping across cases would put two
+        counseling relationships in one line of clicks."""
+        first = store(name="intake.pdf")
+        other_case = Case.objects.create(counselor=counselor, label="Marsh — individual")
+        CaseMember.objects.create(case=other_case, counselee=counselee)
+        elsewhere = services.store_document(
+            case=other_case,
+            owner=counselee,
+            upload=SimpleUploadedFile("elsewhere.pdf", PDF),
+            visibility=Visibility.PRIVATE,
+        )
+        sign_in(counselee)
+
+        page = self.detail_page(client, first)
+
+        assert reverse("documents:detail", args=[elsewhere.public_id]) not in page
+        assert "Next document" not in page
+
+    def test_two_uploaded_in_the_same_instant_do_not_point_at_each_other(
+        self, client, sign_in, counselee, store
+    ):
+        """The tie-break, and the reason it is not decoration: several documents
+        uploaded in one sitting can share a timestamp exactly, and with no total order
+        each of a pair is "before" the other — a Next button that returns to the
+        document it was clicked from."""
+        first = store(name="one.pdf")
+        second = store(name="two.pdf")
+        Document.objects.filter(pk__in=[first.pk, second.pk]).update(created_at=first.created_at)
+        sign_in(counselee)
+
+        pages = [self.detail_page(client, first), self.detail_page(client, second)]
+
+        offered = [
+            reverse("documents:detail", args=[d.public_id]) in page
+            for d, page in zip((second, first), pages, strict=True)
+        ]
+        assert offered.count(True) == 1, "exactly one of the pair leads to the other"
 
 
 def _xlsx_bytes() -> bytes:

@@ -17,6 +17,7 @@ from itertools import chain
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.db.models import Q
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _
@@ -197,6 +198,36 @@ def upload(request, case_public_id):
     )
 
 
+def the_document_after(document, *, actor):
+    """The next document on this case, as the case's list would hand it over.
+
+    "Next" means the next row of ``/cases/<id>/documents/``, which lists newest
+    first — so it is the one uploaded just *before* this one. Read literally, "the
+    next uploaded document" would be the newer one, and that is the wrong end for the
+    journey this exists for: somebody opens the top of a list of eleven documents and
+    wants the other ten without returning to the list between each.
+
+    Resolved through ``for_actor``, which is what makes it safe to offer at all: what
+    it steps over is whatever this actor could not have opened anyway, so a counselee
+    walking a case's documents never learns that a private one sits between two of
+    theirs, and no count of them is implied either.
+
+    The primary key breaks a tie on the timestamp. Several documents uploaded in one
+    sitting can share one to the microsecond, and without a total order a pair of them
+    would point at each other — a Next button that goes back where it came from.
+    """
+    return (
+        Document.objects.for_actor(actor)
+        .filter(case_id=document.case_id)
+        .filter(
+            Q(created_at__lt=document.created_at)
+            | Q(created_at=document.created_at, pk__lt=document.pk)
+        )
+        .order_by("-created_at", "-pk")
+        .first()
+    )
+
+
 @login_required
 def detail(request, public_id):
     document = visible_document_or_404(request, public_id)
@@ -213,6 +244,7 @@ def detail(request, public_id):
         "documents/detail.html",
         {
             "document": document,
+            "next_document": the_document_after(document, actor=request.user),
             "can_change": request.user.has_perm("documents.change_document", document),
             "can_share": request.user.has_perm("documents.share_document", document),
             "can_delete": request.user.has_perm("documents.delete_document", document),
@@ -291,11 +323,13 @@ def preview(request, public_id):
 
 @login_required
 def thumbnail(request, public_id):
-    """The decrypted preview for an image, served inline.
+    """The decrypted preview, served inline.
 
     Inline is safe here and only here: the bytes are a JPEG we produced ourselves
     by re-encoding through Pillow, so the content type is a fact rather than a
-    claim. Nothing the uploader sent survives into this response.
+    claim. Nothing the uploader sent survives into this response — which is as true
+    of a PDF's rendered first page as of a photograph, since both leave
+    ``images.make_thumbnail`` as a small JPEG and nothing else is ever stored here.
     """
     document = visible_document_or_404(request, public_id)
     require_perm(request, "documents.view_document", document)
