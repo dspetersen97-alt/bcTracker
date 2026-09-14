@@ -256,6 +256,28 @@ main {
   padding: 1.5rem 1.25rem 3rem;
 }
 
+/* Back, above the page's own content. Held to the same measure as main and padded to
+   the same edge so it lines up with the heading under it rather than floating in the
+   margin, and quiet: it is a way out, not the thing to do next. The arrow is a
+   character rather than an image so it inherits the colour and the font size. */
+.back {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 1rem 1.25rem 0;
+  font-size: 0.9rem;
+}
+.back a {
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+.back a:hover,
+.back a:focus { text-decoration: underline; }
+
+/* A wide page moves the measure, so Back follows it rather than sitting a quarter of
+   the way across the screen from the heading it belongs over. A browser with no
+   :has() leaves it where it is, which is merely off to the left. */
+.content:has(main.wide) .back { max-width: 68rem; }
+
 /* For a page whose content is not prose: a table with more columns than a reading
    measure can hold — the caseload, with last and next session on it — or a document
    viewer, where the width is the size the page is rendered at. Still a maximum rather

@@ -142,6 +142,10 @@ TEMPLATES = [
                 # The sidebar's links, built from the role. No queries at all —
                 # see apps/core/navigation.py for why they are data and not markup.
                 "apps.core.navigation.navigation",
+                # Where the Back link on every page but Home goes. Reads one header
+                # and no database — see apps/core/backlink.py, which is also where
+                # the reason it is not one line of JavaScript is written down.
+                "apps.core.backlink.back_link",
             ],
         },
     },

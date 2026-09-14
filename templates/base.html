@@ -73,6 +73,19 @@
     {% endif %}
 
     <div class="content">
+      {% comment %} Back, on every page but Home. A link with a real href rather than a
+         script that asks the browser for its history: there is no JavaScript in this
+         application, and see apps/core/backlink.py for what that costs and what it is
+         worth. Absent rather than disabled when there is nowhere to go back to — a page
+         opened from a bookmark has no previous page, and a dead control invites the
+         click that proves it is dead.
+
+         Above the messages and outside <main>, because it is not part of what the page
+         is about; it is the same furniture as the sidebar. {% endcomment %}
+      {% if back_url %}
+        <p class="back"><a href="{{ back_url }}" rel="prev"><span aria-hidden="true">&larr;</span> Back</a></p>
+      {% endif %}
+
       {% comment %} A message has two possible homes, and which one it gets depends on
          whether it is allowed to disappear. A confirmation goes to the toast stack in
          the top right corner and fades out by itself, because the page behind it
